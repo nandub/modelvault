@@ -1,0 +1,6 @@
+/target/
+.modelvault/objects/
+.modelvault/tmp/
+.modelvault/packs/
+.modelvault/deltas/
+*.safetensors

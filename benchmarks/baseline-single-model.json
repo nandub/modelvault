@@ -1,0 +1,32 @@
+{
+  "format_version": 1,
+  "manifests": 1,
+  "objects": 116,
+  "efficiency": {
+    "logical_bytes": 90868376,
+    "unique_logical_bytes": 90868376,
+    "dedup_savings_bytes": 0,
+    "dedup_savings_pct": 0.0,
+    "full_encoded_bytes": 83055309,
+    "compression_savings_bytes": 7813067,
+    "compression_savings_pct": 8.598224535233248,
+    "primary_encoded_bytes": 83055309,
+    "delta_savings_bytes": 0,
+    "delta_savings_pct": 0.0,
+    "duplicate_representation_bytes": 0,
+    "metadata_overhead_bytes": 66311,
+    "actual_physical_bytes": 83121620,
+    "net_physical_savings_bytes": 7746756,
+    "net_physical_savings_pct": 8.525249752455133
+  },
+  "artifacts": [
+    {
+      "source_name": "model.safetensors",
+      "logical_bytes": 90868376,
+      "exclusive_bytes": 90868376,
+      "shared_bytes": 0,
+      "attributed_physical_bytes": 83055309,
+      "shared_pct": 0.0
+    }
+  ]
+}

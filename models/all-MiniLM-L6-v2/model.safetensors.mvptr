@@ -1,0 +1,18 @@
+{
+  "version": 1,
+  "artifact_id": "8087e9bf97c265f8435ed268733ecf3791825ad24850fd5d84d89e32ee3a589a",
+  "format": "safetensors",
+  "logical_size": 90868376,
+  "manifest": ".modelvault/manifests/8087e9bf97c265f8435ed268733ecf3791825ad24850fd5d84d89e32ee3a589a.json",
+  "source_name": "model.safetensors",
+  "provenance": {
+    "provider": "huggingface",
+    "namespace": "sentence-transformers",
+    "repository": "sentence-transformers/all-MiniLM-L6-v2",
+    "model_name": "all-MiniLM-L6-v2",
+    "requested_revision": "main",
+    "resolved_revision": "c9745ed1d9f207416be6d2e6f8de32d1f16199bf",
+    "filename": "model.safetensors",
+    "source_uri": "hf://sentence-transformers/all-MiniLM-L6-v2@c9745ed1d9f207416be6d2e6f8de32d1f16199bf/model.safetensors"
+  }
+}
