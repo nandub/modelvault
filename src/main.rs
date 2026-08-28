@@ -160,7 +160,7 @@ enum Command {
     /// Show tensor-aware differences between two manifests or .mvptr files.
     Diff { left: PathBuf, right: PathBuf, #[arg(long)] all: bool },
     /// Benchmark fixed, tensor-fixed, FastCDC, and tensor-FastCDC reuse.
-    Benchmark { left: PathBuf, right: PathBuf, #[arg(long, default_value_t = 4 * 1024 * 1024)] avg_chunk_size: usize, #[arg(long)] raw: bool },
+    Benchmark { left: PathBuf, right: PathBuf, #[arg(long, default_value_t = 4 * 1024 * 1024)] avg_chunk_size: usize, #[arg(long)] raw: bool, #[arg(long)] json: bool },
     /// Push all objects referenced by a manifest/pointer to a remote.
     Push {
         artifact: PathBuf,
@@ -274,7 +274,7 @@ fn run_cli() -> anyhow::Result<()> {
         Command::Lineage { artifact, json, max_depth } => lineage_cmd(&artifact, json, max_depth)?,
         Command::Checkout { pointer, output } => checkout_cmd(&pointer,output.as_deref())?,
         Command::Diff { left, right, all } => diff_cmd(&left,&right,all)?,
-        Command::Benchmark { left, right, avg_chunk_size, raw } => benchmark_cmd(&left,&right,avg_chunk_size,!raw)?,
+        Command::Benchmark { left, right, avg_chunk_size, raw, json } => benchmark_cmd(&left,&right,avg_chunk_size,!raw,json)?,
         Command::Push { artifact, remote, remote_name, jobs, deep_verify, store } => sync_cmd(&artifact, &store, remote.as_deref(), remote_name.as_deref(), jobs, deep_verify, true)?,
         Command::Pull { artifact, remote, remote_name, jobs, deep_verify, store } => sync_cmd(&artifact, &store, remote.as_deref(), remote_name.as_deref(), jobs, deep_verify, false)?,
         Command::Remote { command, store } => remote_cmd(command, &store)?,
@@ -641,7 +641,7 @@ fn resolve_manifest(path: &Path) -> anyhow::Result<ArtifactManifest> {
 
 fn diff_cmd(left:&Path,right:&Path,all:bool)->anyhow::Result<()> { let l=resolve_manifest(left)?; let r=resolve_manifest(right)?; let d=diff_models(&l,&r); println!("Model diff\nLeft:      {}\nRight:     {}\n\nTensors\n-------\nUnchanged: {}\nChanged:   {}\nAdded:     {}\nRemoved:   {}",l.source_name,r.source_name,d.unchanged,d.changed,d.added,d.removed); println!("\n{:<58} {:<10} {:>12} {:>9}","Tensor","Status","Right bytes","Reuse"); println!("{}","-".repeat(94)); for t in d.tensors.iter().filter(|t|all||t.status!="unchanged") { let pct=if t.right_bytes==0{0.0}else{t.shared_bytes as f64/t.right_bytes as f64*100.0}; println!("{:<58} {:<10} {:>12} {:>8.2}%",t.name,t.status,t.right_bytes,pct); } Ok(()) }
 
-fn benchmark_cmd(left:&Path,right:&Path,avg:usize,safetensors:bool)->anyhow::Result<()> { anyhow::ensure!(avg>0,"--avg-chunk-size must be greater than zero"); let rows=benchmark_pair(left,right,avg,safetensors)?; println!("Chunking benchmark\nLeft:  {}\nRight: {}\nAverage target: {} bytes\n",left.display(),right.display(),avg); println!("{:<18} {:>12} {:>12} {:>14} {:>10} {:>12}","Strategy","Left chunks","Right chunks","Shared bytes","Reuse","Time ms"); println!("{}","-".repeat(84)); for r in rows { println!("{:<18} {:>12} {:>12} {:>14} {:>9.2}% {:>12.2}",r.strategy,r.left_chunks,r.right_chunks,r.shared_bytes,r.reuse_pct,r.elapsed.as_secs_f64()*1000.0); } Ok(()) }
+fn benchmark_cmd(left:&Path,right:&Path,avg:usize,safetensors:bool,json:bool)->anyhow::Result<()> { anyhow::ensure!(avg>0,"--avg-chunk-size must be greater than zero"); let rows=benchmark_pair(left,right,avg,safetensors)?; if json { let results:Vec<_>=rows.iter().map(|r|serde_json::json!({"strategy":r.strategy,"left_chunks":r.left_chunks,"right_chunks":r.right_chunks,"shared_bytes":r.shared_bytes,"right_size":r.right_size,"reuse_pct":r.reuse_pct,"elapsed_ms":r.elapsed.as_secs_f64()*1000.0})).collect(); println!("{}",serde_json::to_string_pretty(&serde_json::json!({"format_version":1,"left":left,"right":right,"avg_chunk_size":avg,"safetensors":safetensors,"results":results}))?); return Ok(()); } println!("Chunking benchmark\nLeft:  {}\nRight: {}\nAverage target: {} bytes\n",left.display(),right.display(),avg); println!("{:<18} {:>12} {:>12} {:>14} {:>10} {:>12}","Strategy","Left chunks","Right chunks","Shared bytes","Reuse","Time ms"); println!("{}","-".repeat(84)); for r in rows { println!("{:<18} {:>12} {:>12} {:>14} {:>9.2}% {:>12.2}",r.strategy,r.left_chunks,r.right_chunks,r.shared_bytes,r.reuse_pct,r.elapsed.as_secs_f64()*1000.0); } Ok(()) }
 
 fn print_add_result(path:&Path,result:&modelvault::artifact::AddArtifactResult){ let logical=result.manifest.logical_size; let reuse_pct=if logical==0{0.0}else{result.reused_bytes as f64/logical as f64*100.0}; println!("Artifact:      {}\nFormat:        {}\nArtifact ID:   {}\nLogical size:  {} bytes\nChunks:        {}\nTensors:       {}\nNew bytes:     {}\nReused bytes:  {}\nReuse:         {:.2}%\nManifest:      {}",path.display(),result.manifest.format,result.manifest.artifact_id,logical,result.manifest.chunks.len(),result.manifest.tensors.len(),result.new_bytes,result.reused_bytes,reuse_pct,result.manifest_path.display()); }
 

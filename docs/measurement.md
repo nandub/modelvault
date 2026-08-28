@@ -26,7 +26,8 @@ compare generic chunking with ModelVault's tensor-bounded strategies:
 cargo run --locked -- benchmark `
     .\artifacts\base\model.safetensors `
     .\artifacts\tuned\model.safetensors `
-    --avg-chunk-size 4194304
+    --avg-chunk-size 4194304 `
+    --json
 ```
 
 The report compares `fixed`, `tensor-fixed`, `fastcdc`, and
@@ -49,6 +50,11 @@ Reuse percentage is the primary comparison metric. Elapsed time is a diagnostic
 measurement and should not be treated as a cross-machine performance claim.
 The command estimates shared logical chunks; it does not by itself measure
 pack, compression, delta, or remote-transfer savings.
+
+`--json` emits a versioned report intended for archival and comparison. The
+report includes the supplied paths, chunk-size target, Safetensors mode, and
+one result per strategy. Paths can be machine-specific, so sanitize them before
+publishing a benchmark report.
 
 To capture repository-wide physical-storage results, write a versioned
 snapshot and compare it with another snapshot:
