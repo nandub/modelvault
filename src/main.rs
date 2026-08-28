@@ -68,6 +68,8 @@ enum RemoteCommand {
     Remove { name: String },
     /// Set the default remote used when push/pull omit a selector.
     Default { name: String },
+    /// Audit a filesystem/UNC remote's manifests and CAS objects.
+    Fsck { name: String, #[arg(long)] deep: bool },
 }
 
 #[derive(Debug, Subcommand)]
@@ -851,6 +853,27 @@ fn remote_cmd(command: RemoteCommand, store: &Path) -> anyhow::Result<()> {
             config.set_default(&name)?;
             config.save(store)?;
             println!("Default remote: {}", name);
+        }
+        RemoteCommand::Fsck { name, deep } => {
+            let remote = config
+                .remotes
+                .get(&name)
+                .ok_or_else(|| anyhow::anyhow!("unknown remote '{name}'"))?;
+            anyhow::ensure!(
+                remote.kind == "filesystem",
+                "remote fsck currently requires a filesystem/UNC remote; S3/MinIO remote-wide listing is not implemented yet"
+            );
+            let remote_path = remote.filesystem_path()?;
+            let report = fsck(remote_path, deep)?;
+            println!("ModelVault remote fsck\nRemote:             {}\nStore:              {}\nMode:               {}\nManifests scanned:  {}\nManifests OK:       {}\nReferenced objects: {}\nMissing objects:    {}\nCorrupt objects:    {}\nOrphan objects:     {}",
+                name, remote_path.display(), if deep { "deep" } else { "structural" }, report.manifests_scanned,
+                report.manifests_ok, report.referenced_objects, report.missing_objects,
+                report.corrupt_objects, report.orphan_objects);
+            if !report.manifest_errors.is_empty() {
+                println!("\nErrors\n------");
+                for error in &report.manifest_errors { println!("- {error}"); }
+            }
+            anyhow::ensure!(report.is_ok(), "remote integrity check failed");
         }
     }
     Ok(())

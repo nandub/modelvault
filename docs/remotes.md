@@ -12,7 +12,14 @@ Remote synchronization transfers **full reconstructed logical CAS objects**. A r
 ```powershell
 modelvault remote add origin \\NAS01\AI\ModelVault --default
 modelvault push .\models\model.safetensors.mvptr --remote-name origin
+modelvault remote fsck origin --deep
 ```
+
+`remote fsck` audits the complete filesystem/UNC remote store: manifests,
+reachable objects, missing objects, corruption, and orphan objects. `--deep`
+reads and BLAKE3-verifies referenced object bodies. Remote-wide S3/MinIO audit
+will follow once the backend exposes bounded, prefix-contained listing APIs;
+the command refuses those remotes rather than performing an incomplete audit.
 
 Direct paths remain supported:
 

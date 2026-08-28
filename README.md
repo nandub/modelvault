@@ -273,6 +273,7 @@ Filesystem/UNC remote:
 modelvault remote add origin D:\ModelVaultRemote --default
 modelvault push .\models\model.safetensors.mvptr --remote-name origin
 modelvault pull .\models\model.safetensors.mvptr --remote-name origin
+modelvault remote fsck origin --deep
 ```
 
 Direct filesystem path remains supported:
