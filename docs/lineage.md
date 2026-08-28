@@ -14,7 +14,7 @@ Each child artifact may contain zero or more parent edges:
 }
 ```
 
-Common operation labels include `fine-tune`, `quantize`, `convert`, `merge`, `distill`, and `prune`. The schema intentionally keeps the label extensible rather than defining a closed enum.
+Common operation labels include `fine-tune`, `quantize`, `convert`, `merge`, `distill`, `prune`, and `extract-tensors`. The schema intentionally keeps the label extensible rather than defining a closed enum.
 
 ## Recording a derivation
 

@@ -179,8 +179,20 @@ modelvault extract-tensors .\models\model.safetensors.mvptr `
 ```
 
 The source artifact is fully hash-verified before ModelVault publishes the
-derived output. The command reports the derived file's BLAKE3 ID; it does not
-create a pointer or manifest for that new file automatically.
+derived output. The command reports the derived file's BLAKE3 ID.
+
+To register that derived file in the repository and preserve its relationship
+to the source, add `--to`. ModelVault imports the resulting Safetensors file,
+writes its pointer and manifest, and records an `extract-tensors` lineage edge.
+Use `--stage` to stage the pointer and manifest.
+
+```powershell
+modelvault extract-tensors .\models\model.safetensors.mvptr `
+  --tensor encoder.layer.0.attention.self.query.weight `
+  --output .\exports\query.safetensors `
+  --to .\models\derived\query.safetensors `
+  --stage
+```
 
 From a manifest directly:
 

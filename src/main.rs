@@ -158,7 +158,21 @@ enum Command {
     /// Materialize the original artifact described by a .mvptr file.
     Checkout { pointer: PathBuf, #[arg(long)] output: Option<PathBuf> },
     /// Write a derived Safetensors file containing only explicitly selected tensors.
-    ExtractTensors { pointer: PathBuf, #[arg(long = "tensor", required = true)] tensors: Vec<String>, #[arg(long)] output: PathBuf },
+    ExtractTensors {
+        pointer: PathBuf,
+        #[arg(long = "tensor", required = true)]
+        tensors: Vec<String>,
+        /// Where to write the derived Safetensors file.
+        #[arg(long)]
+        output: PathBuf,
+        /// Also import the derived file at this logical repository path and record its lineage.
+        #[arg(long)]
+        to: Option<PathBuf>,
+        #[arg(long, default_value_t = 4 * 1024 * 1024)]
+        chunk_size: usize,
+        #[arg(long)]
+        stage: bool,
+    },
     /// Show tensor-aware differences between two manifests or .mvptr files.
     Diff { left: PathBuf, right: PathBuf, #[arg(long)] all: bool },
     /// Benchmark fixed, tensor-fixed, FastCDC, and tensor-FastCDC reuse.
@@ -275,7 +289,7 @@ fn run_cli() -> anyhow::Result<()> {
         Command::Derive { artifact, parent, operation, note, stage } => derive_cmd(&artifact, &parent, &operation, note.as_deref(), stage)?,
         Command::Lineage { artifact, json, max_depth } => lineage_cmd(&artifact, json, max_depth)?,
         Command::Checkout { pointer, output } => checkout_cmd(&pointer,output.as_deref())?,
-        Command::ExtractTensors { pointer, tensors, output } => extract_tensors_cmd(&pointer, &tensors, &output)?,
+        Command::ExtractTensors { pointer, tensors, output, to, chunk_size, stage } => extract_tensors_cmd(&pointer, &tensors, &output, to.as_deref(), chunk_size, stage)?,
         Command::Diff { left, right, all } => diff_cmd(&left,&right,all)?,
         Command::Benchmark { left, right, avg_chunk_size, raw, json } => benchmark_cmd(&left,&right,avg_chunk_size,!raw,json)?,
         Command::Push { artifact, remote, remote_name, jobs, deep_verify, store } => sync_cmd(&artifact, &store, remote.as_deref(), remote_name.as_deref(), jobs, deep_verify, true)?,
@@ -627,7 +641,15 @@ fn checkout_cmd(pointer_path: &Path, output: Option<&Path>) -> anyhow::Result<()
     Ok(())
 }
 
-fn extract_tensors_cmd(pointer_path: &Path, tensors: &[String], output: &Path) -> anyhow::Result<()> {
+fn extract_tensors_cmd(
+    pointer_path: &Path,
+    tensors: &[String],
+    output: &Path,
+    import_target: Option<&Path>,
+    chunk_size: usize,
+    stage: bool,
+) -> anyhow::Result<()> {
+    anyhow::ensure!(chunk_size > 0, "--chunk-size must be greater than zero");
     let root = git_root()?;
     let pointer = ArtifactPointer::load(pointer_path)?;
     let (_, manifest) = pointer.resolve_manifest(&root)?;
@@ -641,6 +663,17 @@ fn extract_tensors_cmd(pointer_path: &Path, tensors: &[String], output: &Path) -
         result.tensor_count,
         result.logical_size,
     );
+    if let Some(target) = import_target {
+        import_cmd(output, target, ArtifactFormat::Safetensors, chunk_size, stage, None)?;
+        let logical_target = repository_target_path(&root, target)?;
+        let derived_pointer_path = pointer_path_for_target(&logical_target);
+        let derived_pointer = ArtifactPointer::load(&derived_pointer_path)?;
+        anyhow::ensure!(
+            derived_pointer.artifact_id.eq_ignore_ascii_case(&result.derived_artifact_id),
+            "imported derived artifact ID does not match extracted output"
+        );
+        derive_cmd(&derived_pointer_path, pointer_path, "extract-tensors", None, stage)?;
+    }
     Ok(())
 }
 
