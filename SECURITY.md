@@ -65,6 +65,13 @@ Use HTTPS for non-local S3-compatible endpoints. ModelVault warns when a non-loo
 
 ModelVault configuration stores remote locations and optional AWS profile names, not AWS secret keys. AWS credentials are resolved through the AWS SDK credential chain when the optional `s3` feature is enabled.
 
+### Optional attestations
+
+The optional `signing` feature verifies Ed25519 attestations over a canonical
+manifest digest. Attestations authenticate possession of a private key; they do
+not make Git-controlled manifests trusted before signature verification. Private
+keys are supplied from local files and are never stored in repository metadata.
+
 ## Dependency and build security
 
 ModelVault is an executable application and release builds should include `Cargo.lock` and use locked dependency resolution:

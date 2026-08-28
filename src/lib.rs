@@ -1,4 +1,6 @@
 pub mod artifact;
+#[cfg(feature = "signing")]
+pub mod attestation;
 pub mod benchmark;
 pub mod cas;
 pub mod chunk;

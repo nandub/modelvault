@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand, ValueEnum};
+#[cfg(feature = "signing")]
+use modelvault::attestation::{attest_manifest, default_attestation_path, save_attestation, verify_attestation};
 use modelvault::{
     artifact::{add_raw_artifact, add_safetensors_artifact, inspect_safetensors, materialize, materialize_selected_safetensors, resolve_selected_tensor_names, verify_artifact},
     benchmark::benchmark_pair,
@@ -86,6 +88,12 @@ enum Command {
     Materialize { manifest: PathBuf, output: PathBuf, #[arg(long, default_value = ".modelvault")] store: PathBuf },
     /// Verify every object referenced by an artifact manifest.
     Verify { manifest: PathBuf, #[arg(long, default_value = ".modelvault")] store: PathBuf },
+    /// Create an optional Ed25519 attestation for a manifest or pointer.
+    #[cfg(feature = "signing")]
+    Attest { artifact: PathBuf, #[arg(long)] private_key: PathBuf, #[arg(long)] key_id: String, #[arg(long)] output: Option<PathBuf> },
+    /// Verify an Ed25519 manifest attestation using a public key.
+    #[cfg(feature = "signing")]
+    VerifyAttestation { artifact: PathBuf, #[arg(long)] public_key: PathBuf, #[arg(long)] attestation: Option<PathBuf> },
     /// Compare chunk reuse between two manifests.
     Compare { left: PathBuf, right: PathBuf },
     /// Track a large artifact using a Git-friendly pointer and manifest.
@@ -277,6 +285,10 @@ fn run_cli() -> anyhow::Result<()> {
         Command::AddRaw { path, chunk_size, store } => { anyhow::ensure!(chunk_size>0,"--chunk-size must be greater than zero"); let cas=LocalCas::open(store)?; let result=add_raw_artifact(&path,&cas,chunk_size)?; print_add_result(&path,&result); }
         Command::Materialize { manifest, output, store } => { let cas=LocalCas::open(store)?; let manifest=ArtifactManifest::load(&manifest)?; materialize(&manifest,&cas,&output)?; println!("Materialized: {}\nBLAKE3:      {}\nVerified:    byte-for-byte hash match",output.display(),manifest.artifact_id); }
         Command::Verify { manifest, store } => { let cas=LocalCas::open(store)?; let manifest=ArtifactManifest::load(&manifest)?; verify_artifact(&manifest,&cas)?; println!("Artifact: {}\nObjects:  {}\nStatus:   OK",manifest.source_name,manifest.chunks.len()); }
+        #[cfg(feature = "signing")]
+        Command::Attest { artifact, private_key, key_id, output } => attest_cmd(&artifact, &private_key, &key_id, output.as_deref())?,
+        #[cfg(feature = "signing")]
+        Command::VerifyAttestation { artifact, public_key, attestation } => verify_attestation_cmd(&artifact, &public_key, attestation.as_deref())?,
         Command::Compare { left, right } => compare_manifests(&ArtifactManifest::load(left)?,&ArtifactManifest::load(right)?),
         Command::Track { path, format, chunk_size, pointer, stage } => track_cmd(&path, format, chunk_size, pointer.as_deref(), stage)?,
         Command::Import { source, to, format, chunk_size, stage } => import_cmd(&source, &to, format, chunk_size, stage, None)?,
@@ -324,6 +336,27 @@ fn run_cli() -> anyhow::Result<()> {
 fn add_by_format(path:&Path,cas:&LocalCas,format:ArtifactFormat,chunk_size:usize)->anyhow::Result<modelvault::artifact::AddArtifactResult>{
     let chosen=match format { ArtifactFormat::Auto=>if path.extension().and_then(|e|e.to_str()).is_some_and(|e|e.eq_ignore_ascii_case("safetensors")){ArtifactFormat::Safetensors}else{ArtifactFormat::Raw}, other=>other };
     match chosen { ArtifactFormat::Safetensors=>add_safetensors_artifact(path,cas,chunk_size), ArtifactFormat::Raw|ArtifactFormat::Auto=>add_raw_artifact(path,cas,chunk_size) }
+}
+
+#[cfg(feature = "signing")]
+fn attest_cmd(artifact: &Path, private_key: &Path, key_id: &str, output: Option<&Path>) -> anyhow::Result<()> {
+    let root = git_root()?;
+    let manifest = resolve_manifest(artifact)?;
+    let path = output.map(PathBuf::from).unwrap_or_else(|| default_attestation_path(&root.join(".modelvault"), &manifest.artifact_id));
+    let attestation = attest_manifest(&manifest, private_key, key_id)?;
+    save_attestation(&attestation, &path)?;
+    println!("ModelVault attestation\nArtifact ID:      {}\nManifest BLAKE3:  {}\nAlgorithm:        {}\nKey ID:           {}\nAttestation:      {}", attestation.artifact_id, attestation.manifest_blake3, attestation.algorithm, attestation.key_id, path.display());
+    Ok(())
+}
+
+#[cfg(feature = "signing")]
+fn verify_attestation_cmd(artifact: &Path, public_key: &Path, attestation: Option<&Path>) -> anyhow::Result<()> {
+    let root = git_root()?;
+    let manifest = resolve_manifest(artifact)?;
+    let path = attestation.map(PathBuf::from).unwrap_or_else(|| default_attestation_path(&root.join(".modelvault"), &manifest.artifact_id));
+    let verified = verify_attestation(&manifest, &path, public_key)?;
+    println!("ModelVault attestation verification\nArtifact ID:      {}\nManifest BLAKE3:  {}\nKey ID:           {}\nStatus:           valid", verified.artifact_id, verified.manifest_blake3, verified.key_id);
+    Ok(())
 }
 
 fn inspect_cmd(path:PathBuf,json:bool)->anyhow::Result<()> { let inspection=inspect_safetensors(&path)?; if json { println!("{}",serde_json::to_string_pretty(&inspection)?); } else { println!("Format:       {}\nFile size:    {} bytes\nTensor count: {}\n",inspection.format,inspection.file_size,inspection.tensor_count); println!("{:<54} {:<10} {:<22} {:>12}","Tensor","DType","Shape","Bytes"); println!("{}","-".repeat(104)); for t in inspection.tensors { println!("{:<54} {:<10} {:<22} {:>12}",t.name,t.dtype,format!("{:?}",t.shape),t.byte_len); } } Ok(()) }

@@ -27,3 +27,20 @@ ModelVault records optional stable-source provenance for artifacts imported from
 modelvault provenance .\models\model.safetensors.mvptr
 modelvault provenance .\models\model.safetensors.mvptr --json
 ```
+
+## Attestations
+
+With the optional `signing` Cargo feature, ModelVault can create and verify
+Ed25519 attestations stored separately from manifests. An attestation signs the
+BLAKE3 digest of the complete canonical manifest payload, so it binds artifact
+identity, chunk references, provenance, and lineage without changing any of
+those identities. Private/public key files contain base64-encoded 32-byte raw
+Ed25519 key material and must remain outside the repository.
+
+```powershell
+cargo run --features signing -- attest .\models\model.safetensors.mvptr `
+  --private-key C:\Keys\modelvault-release.private `
+  --key-id release-2026-08
+cargo run --features signing -- verify-attestation .\models\model.safetensors.mvptr `
+  --public-key C:\Keys\modelvault-release.public
+```
