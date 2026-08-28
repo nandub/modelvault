@@ -74,6 +74,12 @@ running; the first run may download the MinIO server and client images.
 .\scripts\Test-S3-MinIO.ps1
 ```
 
+For the full default, S3-build, and MinIO acceptance gate in one command, run:
+
+```powershell
+.\scripts\Validate-ModelVault.ps1 -WithS3 -WithMinio
+```
+
 The script starts a loopback-only MinIO container with generated credentials,
 creates a unique bucket, deep-verifies a push, then creates a clean Git clone
 that deep-verifies a pull, checkout, and `fsck --deep`. It removes the unique

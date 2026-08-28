@@ -38,7 +38,11 @@ A Windows validation helper is included. It generates `Cargo.lock` if a clean so
 ```powershell
 .\scripts\Validate-ModelVault.ps1
 .\scripts\Validate-ModelVault.ps1 -WithS3 -SecurityTools
+.\scripts\Validate-ModelVault.ps1 -WithS3 -WithMinio
 ```
+
+`-WithMinio` requires Docker Desktop and runs a disposable loopback-only MinIO
+push/pull/checkout acceptance test. See [the remote documentation](docs/remotes.md#disposable-minio-acceptance-test).
 
 Optional security tooling:
 

@@ -1,6 +1,7 @@
 [CmdletBinding()]
 param(
     [switch]$WithS3,
+    [switch]$WithMinio,
     [switch]$SecurityTools
 )
 
@@ -47,6 +48,10 @@ function Test-CargoLockMatchesPackageVersion {
 $repo = Split-Path -Parent $PSScriptRoot
 Push-Location $repo
 try {
+    if ($WithMinio -and -not $WithS3) {
+        throw '-WithMinio requires -WithS3 because the MinIO acceptance test uses the optional S3 feature.'
+    }
+
     $packageVersion = Get-ModelVaultPackageVersion -CargoTomlPath '.\Cargo.toml'
     $lockMatches = Test-CargoLockMatchesPackageVersion -CargoLockPath '.\Cargo.lock' -ExpectedVersion $packageVersion
 
@@ -68,6 +73,11 @@ try {
     if ($WithS3) {
         cargo build --locked --features s3
         if ($LASTEXITCODE -ne 0) { throw 'cargo build --features s3 failed' }
+    }
+
+    if ($WithMinio) {
+        Write-Host 'Running disposable MinIO S3 acceptance test.'
+        & .\scripts\Test-S3-MinIO.ps1
     }
 
     if ($SecurityTools) {
