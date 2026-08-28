@@ -168,6 +168,20 @@ From a Git pointer:
 modelvault checkout .\models\model.safetensors.mvptr
 ```
 
+To create a derived Safetensors file containing only named tensors, use
+`extract-tensors`. This does not alter the source artifact or its identity:
+
+```powershell
+modelvault extract-tensors .\models\model.safetensors.mvptr `
+  --tensor encoder.layer.0.attention.self.query.weight `
+  --tensor encoder.layer.0.attention.self.query.bias `
+  --output .\exports\layer-0-query.safetensors
+```
+
+The source artifact is fully hash-verified before ModelVault publishes the
+derived output. The command reports the derived file's BLAKE3 ID; it does not
+create a pointer or manifest for that new file automatically.
+
 From a manifest directly:
 
 ```powershell
