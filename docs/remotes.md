@@ -64,6 +64,25 @@ modelvault remote add-s3 lab models `
 
 Plain HTTP is appropriate for a loopback development endpoint. Use HTTPS for non-local S3-compatible endpoints. ModelVault warns when a custom non-loopback endpoint is configured with `http://`.
 
+### Disposable MinIO acceptance test
+
+On Windows, the repository includes an opt-in end-to-end acceptance harness for
+the S3-compatible path. It requires Docker Desktop with its Linux engine
+running; the first run may download the MinIO server and client images.
+
+```powershell
+.\scripts\Test-S3-MinIO.ps1
+```
+
+The script starts a loopback-only MinIO container with generated credentials,
+creates a unique bucket, deep-verifies a push, then creates a clean Git clone
+that deep-verifies a pull, checkout, and `fsck --deep`. It removes the unique
+container, bucket data, clone, temporary remote configuration, and any MinIO
+images it downloaded. `-KeepArtifacts` retains the container and clone for
+failure investigation. The source repository must normally be clean; use
+`-AllowDirty` only while developing the harness, because its clean clone tests
+committed `HEAD` while source-side commands test the working tree.
+
 ## Logical remote layout
 
 ```text
