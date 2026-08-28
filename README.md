@@ -178,6 +178,17 @@ modelvault extract-tensors .\models\model.safetensors.mvptr `
   --output .\exports\layer-0-query.safetensors
 ```
 
+For a complete module or layer, repeat `--prefix`; a prefix selects all tensor
+names that start with it. Exact `--tensor` and `--prefix` selectors can be
+combined. Empty or unmatched prefixes are rejected, so a typo cannot silently
+produce an empty derived artifact.
+
+```powershell
+modelvault extract-tensors .\models\model.safetensors.mvptr `
+  --prefix encoder.layer.0. `
+  --output .\exports\layer-0.safetensors
+```
+
 The source artifact is fully hash-verified before ModelVault publishes the
 derived output. The command reports the derived file's BLAKE3 ID.
 

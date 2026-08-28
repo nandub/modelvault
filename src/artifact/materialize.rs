@@ -74,6 +74,39 @@ pub struct SelectedTensorMaterialization {
     pub logical_size: u64,
 }
 
+/// Resolve exact tensor names and prefix selectors against a validated
+/// Safetensors manifest. Selectors are resolved before any source/object or
+/// output filesystem work begins.
+pub fn resolve_selected_tensor_names(
+    manifest: &ArtifactManifest,
+    names: &[String],
+    prefixes: &[String],
+) -> anyhow::Result<Vec<String>> {
+    validate_manifest_structure(manifest)?;
+    ensure!(manifest.format == "safetensors", "tensor selection requires a Safetensors artifact");
+    ensure!(!names.is_empty() || !prefixes.is_empty(), "at least one --tensor or --prefix is required");
+
+    let requested: HashSet<&str> = names.iter().map(String::as_str).collect();
+    ensure!(requested.len() == names.len(), "duplicate tensor selections are not allowed");
+    ensure!(names.iter().all(|name| !name.is_empty()), "tensor selections cannot be empty");
+    let unique_prefixes: HashSet<&str> = prefixes.iter().map(String::as_str).collect();
+    ensure!(unique_prefixes.len() == prefixes.len(), "duplicate tensor prefixes are not allowed");
+    ensure!(prefixes.iter().all(|prefix| !prefix.is_empty()), "tensor prefixes cannot be empty");
+
+    let available: HashSet<&str> = manifest.tensors.iter().map(|tensor| tensor.name.as_str()).collect();
+    ensure!(requested.iter().all(|name| available.contains(name)), "one or more selected tensors do not exist in the source artifact");
+    for prefix in prefixes {
+        ensure!(manifest.tensors.iter().any(|tensor| tensor.name.starts_with(prefix)), "no source tensors match prefix '{prefix}'");
+    }
+
+    Ok(manifest
+        .tensors
+        .iter()
+        .filter(|tensor| requested.contains(tensor.name.as_str()) || prefixes.iter().any(|prefix| tensor.name.starts_with(prefix)))
+        .map(|tensor| tensor.name.clone())
+        .collect())
+}
+
 #[derive(Serialize)]
 struct SafetensorsHeader {
     dtype: String,

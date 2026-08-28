@@ -1,7 +1,7 @@
 use std::{collections::HashMap, fs, process::Command};
 
 use modelvault::{
-    artifact::{add_safetensors_artifact, materialize, materialize_selected_safetensors},
+    artifact::{add_safetensors_artifact, materialize, materialize_selected_safetensors, resolve_selected_tensor_names},
     cas::LocalCas,
     pointer::ArtifactPointer,
 };
@@ -58,6 +58,27 @@ fn selected_tensors_materialize_as_a_valid_derived_safetensors_file() {
 }
 
 #[test]
+fn tensor_prefix_selectors_are_resolved_in_manifest_order() {
+    let temp = tempdir().unwrap();
+    let source = temp.path().join("model.safetensors");
+    let a = vec![1u8; 32];
+    let b = vec![2u8; 32];
+    let c = vec![3u8; 32];
+    let mut tensors = HashMap::new();
+    tensors.insert("encoder.a", TensorView::new(Dtype::U8, vec![32], &a).unwrap());
+    tensors.insert("encoder.b", TensorView::new(Dtype::U8, vec![32], &b).unwrap());
+    tensors.insert("head.weight", TensorView::new(Dtype::U8, vec![32], &c).unwrap());
+    serialize_to_file(tensors, None, &source).unwrap();
+    let cas = LocalCas::open(temp.path().join(".modelvault")).unwrap();
+    let added = add_safetensors_artifact(&source, &cas, 32).unwrap();
+
+    let selected = resolve_selected_tensor_names(&added.manifest, &["head.weight".into()], &["encoder.".into()]).unwrap();
+    assert_eq!(selected, vec!["encoder.a", "encoder.b", "head.weight"]);
+    assert!(resolve_selected_tensor_names(&added.manifest, &[], &["missing.".into()]).is_err());
+    assert!(resolve_selected_tensor_names(&added.manifest, &[], &[String::new()]).is_err());
+}
+
+#[test]
 fn extract_tensors_can_import_a_derived_artifact_and_record_lineage() {
     let repo = tempdir().unwrap();
     let source = repo.path().join("source.safetensors");
@@ -88,8 +109,8 @@ fn extract_tensors_can_import_a_derived_artifact_and_record_lineage() {
         .args([
             "extract-tensors",
             "models/source.safetensors.mvptr",
-            "--tensor",
-            "layer.b",
+            "--prefix",
+            "layer.",
             "--output",
             output.to_str().unwrap(),
             "--to",
@@ -110,6 +131,7 @@ fn extract_tensors_can_import_a_derived_artifact_and_record_lineage() {
 
     let bytes = fs::read(output).unwrap();
     let selected = SafeTensors::deserialize(&bytes).unwrap();
-    assert_eq!(selected.len(), 1);
+    assert_eq!(selected.len(), 2);
+    assert_eq!(selected.tensor("layer.a").unwrap().data(), a.as_slice());
     assert_eq!(selected.tensor("layer.b").unwrap().data(), b.as_slice());
 }

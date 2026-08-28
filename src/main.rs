@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand, ValueEnum};
 use modelvault::{
-    artifact::{add_raw_artifact, add_safetensors_artifact, inspect_safetensors, materialize, materialize_selected_safetensors, verify_artifact},
+    artifact::{add_raw_artifact, add_safetensors_artifact, inspect_safetensors, materialize, materialize_selected_safetensors, resolve_selected_tensor_names, verify_artifact},
     benchmark::benchmark_pair,
     cas::{CompressionMode, LocalCas},
     config::{ModelVaultConfig, RemoteDefinition},
@@ -160,8 +160,11 @@ enum Command {
     /// Write a derived Safetensors file containing only explicitly selected tensors.
     ExtractTensors {
         pointer: PathBuf,
-        #[arg(long = "tensor", required = true)]
+        #[arg(long = "tensor", required_unless_present = "prefixes")]
         tensors: Vec<String>,
+        /// Select every tensor whose name starts with this prefix.
+        #[arg(long = "prefix", required_unless_present = "tensors")]
+        prefixes: Vec<String>,
         /// Where to write the derived Safetensors file.
         #[arg(long)]
         output: PathBuf,
@@ -289,7 +292,7 @@ fn run_cli() -> anyhow::Result<()> {
         Command::Derive { artifact, parent, operation, note, stage } => derive_cmd(&artifact, &parent, &operation, note.as_deref(), stage)?,
         Command::Lineage { artifact, json, max_depth } => lineage_cmd(&artifact, json, max_depth)?,
         Command::Checkout { pointer, output } => checkout_cmd(&pointer,output.as_deref())?,
-        Command::ExtractTensors { pointer, tensors, output, to, chunk_size, stage } => extract_tensors_cmd(&pointer, &tensors, &output, to.as_deref(), chunk_size, stage)?,
+        Command::ExtractTensors { pointer, tensors, prefixes, output, to, chunk_size, stage } => extract_tensors_cmd(&pointer, &tensors, &prefixes, &output, to.as_deref(), chunk_size, stage)?,
         Command::Diff { left, right, all } => diff_cmd(&left,&right,all)?,
         Command::Benchmark { left, right, avg_chunk_size, raw, json } => benchmark_cmd(&left,&right,avg_chunk_size,!raw,json)?,
         Command::Push { artifact, remote, remote_name, jobs, deep_verify, store } => sync_cmd(&artifact, &store, remote.as_deref(), remote_name.as_deref(), jobs, deep_verify, true)?,
@@ -644,6 +647,7 @@ fn checkout_cmd(pointer_path: &Path, output: Option<&Path>) -> anyhow::Result<()
 fn extract_tensors_cmd(
     pointer_path: &Path,
     tensors: &[String],
+    prefixes: &[String],
     output: &Path,
     import_target: Option<&Path>,
     chunk_size: usize,
@@ -654,7 +658,8 @@ fn extract_tensors_cmd(
     let pointer = ArtifactPointer::load(pointer_path)?;
     let (_, manifest) = pointer.resolve_manifest(&root)?;
     let cas = LocalCas::open(root.join(".modelvault"))?;
-    let result = materialize_selected_safetensors(&manifest, &cas, tensors, output)?;
+    let selected_names = resolve_selected_tensor_names(&manifest, tensors, prefixes)?;
+    let result = materialize_selected_safetensors(&manifest, &cas, &selected_names, output)?;
     println!(
         "Derived Safetensors: {}\nSource artifact ID:  {}\nDerived artifact ID: {}\nTensors:             {}\nLogical size:        {} bytes\nVerified:            source byte-for-byte hash match",
         output.display(),
