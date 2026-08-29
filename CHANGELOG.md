@@ -8,6 +8,7 @@
 - Fixed SHA-pinned Rust toolchain actions to receive their explicit toolchain
   inputs.
 - Added weekly Dependabot updates for Cargo dependencies and GitHub Actions.
+- Added a post-publish Linux archive checksum, extraction, and CLI smoke test.
 
 ## 1.7.0 - Remote lifecycle, derived artifacts, and CI
 

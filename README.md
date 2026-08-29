@@ -58,7 +58,9 @@ builds the default-feature `--release` binary for Windows x86_64, Linux x86_64
 and ARM64, and macOS Intel and Apple Silicon. It packages each as a ZIP file,
 verifies the binary can report its version, writes `SHA256SUMS`, and attaches
 the assets to the matching GitHub Release. S3 remains an optional source build
-feature rather than a dependency of the distributed default binaries.
+feature rather than a dependency of the distributed default binaries. The
+workflow then downloads the published Linux archive, verifies it against
+`SHA256SUMS`, extracts it, and runs its version command.
 
 Each release asset and `SHA256SUMS` receive a keyless Sigstore bundle. See
 [release artifact signing](docs/release-signing.md) for verification commands.

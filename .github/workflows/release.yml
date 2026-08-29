@@ -61,7 +61,12 @@ jobs:
         run: |
           New-Item -ItemType Directory -Path release-assets | Out-Null
           $archive = "release-assets/modelvault-$env:RELEASE_TAG-${{ matrix.target }}.zip"
-          Compress-Archive -Path '${{ matrix.binary }}' -DestinationPath $archive
+          if ($IsWindows) {
+            Compress-Archive -Path '${{ matrix.binary }}' -DestinationPath $archive
+          } else {
+            & zip -j $archive '${{ matrix.binary }}'
+            if ($LASTEXITCODE -ne 0) { throw 'Unable to create release archive.' }
+          }
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: modelvault-${{ matrix.target }}
@@ -110,3 +115,26 @@ jobs:
           }
           gh release upload $env:RELEASE_TAG release-assets/* --repo $env:GITHUB_REPOSITORY --clobber
           if ($LASTEXITCODE -ne 0) { throw 'Unable to upload release assets.' }
+      - name: Smoke-test published Linux archive
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $assetName = "modelvault-$env:RELEASE_TAG-x86_64-unknown-linux-gnu.zip"
+          $downloadDirectory = Join-Path $PWD 'release-smoke-download'
+          $extractDirectory = Join-Path $PWD 'release-smoke-extract'
+          New-Item -ItemType Directory -Path $downloadDirectory | Out-Null
+          gh release download $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY `
+            --pattern $assetName --pattern SHA256SUMS --dir $downloadDirectory
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to download published release assets.' }
+
+          $checksumLine = Get-Content (Join-Path $downloadDirectory 'SHA256SUMS') |
+            Where-Object { $_ -match "  $([regex]::Escape($assetName))$" }
+          if (@($checksumLine).Count -ne 1) { throw "Expected one checksum entry for $assetName." }
+          $expectedHash = ($checksumLine -split '\s+', 2)[0].ToLowerInvariant()
+          $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $downloadDirectory $assetName)).Hash.ToLowerInvariant()
+          if ($actualHash -ne $expectedHash) { throw "Checksum mismatch for $assetName." }
+
+          Expand-Archive -LiteralPath (Join-Path $downloadDirectory $assetName) -DestinationPath $extractDirectory
+          & (Join-Path $extractDirectory 'modelvault') -V
+          if ($LASTEXITCODE -ne 0) { throw 'Published ModelVault binary failed its version check.' }
