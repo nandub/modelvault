@@ -72,10 +72,15 @@ fn deep_fsck_accepts_zstd_compressed_loose_objects() {
 
     let mut cas = LocalCas::open(&store).unwrap();
     add_raw_artifact(&source, &cas, 4096).unwrap();
-    cas.migrate_loose_compression(CompressionMode::Zstd, 3).unwrap();
+    cas.migrate_loose_compression(CompressionMode::Zstd, 3)
+        .unwrap();
 
     let check = fsck(&store, true).unwrap();
-    assert!(check.is_ok(), "deep fsck errors: {:?}", check.manifest_errors);
+    assert!(
+        check.is_ok(),
+        "deep fsck errors: {:?}",
+        check.manifest_errors
+    );
     assert_eq!(check.manifests_ok, 1);
     assert_eq!(check.missing_objects, 0);
     assert_eq!(check.corrupt_objects, 0);

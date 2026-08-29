@@ -1,6 +1,9 @@
 use std::fs;
 
-use modelvault::{artifact::{add_raw_artifact, materialize}, cas::LocalCas};
+use modelvault::{
+    artifact::{add_raw_artifact, materialize},
+    cas::LocalCas,
+};
 use tempfile::tempdir;
 
 #[test]
@@ -9,7 +12,9 @@ fn artifact_materializes_after_objects_are_packed_and_loose_removed() {
     let store = dir.path().join("store");
     let source = dir.path().join("source.bin");
     let output = dir.path().join("restored.bin");
-    let bytes = (0..(1024 * 256)).map(|i| (i % 251) as u8).collect::<Vec<_>>();
+    let bytes = (0..(1024 * 256))
+        .map(|i| (i % 251) as u8)
+        .collect::<Vec<_>>();
     fs::write(&source, &bytes).unwrap();
 
     let cas = LocalCas::open(&store).unwrap();

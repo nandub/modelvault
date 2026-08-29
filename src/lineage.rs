@@ -79,8 +79,16 @@ pub fn ensure_no_lineage_cycle(
             continue;
         }
         let manifest = ArtifactManifest::load(path)?;
-        pending.extend(manifest.lineage.into_iter().map(|edge| edge.parent_artifact_id));
-        ensure!(seen.len() <= 100_000, "lineage graph exceeds safety traversal limit");
+        pending.extend(
+            manifest
+                .lineage
+                .into_iter()
+                .map(|edge| edge.parent_artifact_id),
+        );
+        ensure!(
+            seen.len() <= 100_000,
+            "lineage graph exceeds safety traversal limit"
+        );
     }
     Ok(())
 }
@@ -103,7 +111,10 @@ fn build_node(
 ) -> anyhow::Result<LineageGraphNode> {
     let id = manifest.artifact_id.to_ascii_lowercase();
     if !stack.insert(id.clone()) {
-        bail!("lineage cycle detected at artifact {}", manifest.artifact_id);
+        bail!(
+            "lineage cycle detected at artifact {}",
+            manifest.artifact_id
+        );
     }
 
     let mut node = LineageGraphNode {
@@ -122,7 +133,9 @@ fn build_node(
             let parent_node = if parent_path.is_file() {
                 let parent = ArtifactManifest::load(&parent_path)?;
                 ensure!(
-                    parent.artifact_id.eq_ignore_ascii_case(&edge.parent_artifact_id),
+                    parent
+                        .artifact_id
+                        .eq_ignore_ascii_case(&edge.parent_artifact_id),
                     "lineage parent manifest identity mismatch for {}",
                     edge.parent_artifact_id
                 );

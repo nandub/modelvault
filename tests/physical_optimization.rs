@@ -15,7 +15,8 @@ fn storage_distinguishes_duplicate_representations_from_orphans() {
     fs::write(&source, vec![b'A'; 128 * 1024]).unwrap();
     let mut cas = LocalCas::open(&store).unwrap();
     add_raw_artifact(&source, &cas, 4096).unwrap();
-    cas.migrate_loose_compression(CompressionMode::Zstd, 3).unwrap();
+    cas.migrate_loose_compression(CompressionMode::Zstd, 3)
+        .unwrap();
     cas.repack(false).unwrap();
 
     let report = storage_report(&store).unwrap();

@@ -44,6 +44,15 @@ A Windows validation helper is included. It generates `Cargo.lock` if a clean so
 `-WithMinio` requires Docker Desktop and runs a disposable loopback-only MinIO
 push/pull/checkout acceptance test. See [the remote documentation](docs/remotes.md#disposable-minio-acceptance-test).
 
+## Continuous integration
+
+GitHub Actions validates the locked default build on `ubuntu-latest`,
+`windows-latest`, and `macos-latest`. Each platform runs formatting, build,
+tests, and strict Clippy. A separate Linux job builds the optional `s3` feature
+once, keeping AWS SDK compile cost out of the cross-platform matrix. The
+Docker-based MinIO acceptance harness remains an explicit local/release gate;
+run it with `Validate-ModelVault.ps1 -WithS3 -WithMinio`.
+
 Optional security tooling:
 
 ```powershell

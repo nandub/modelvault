@@ -10,7 +10,9 @@ fn named_remote_round_trips_and_resolves_default() {
     let remote_path = temp.path().join("remote");
 
     let mut config = ModelVaultConfig::default();
-    config.add_filesystem_remote("origin", remote_path.clone()).unwrap();
+    config
+        .add_filesystem_remote("origin", remote_path.clone())
+        .unwrap();
     config.set_default("origin").unwrap();
     config.save(&store).unwrap();
 
@@ -56,8 +58,12 @@ fn s3_remote_round_trips_with_minio_settings() {
 #[test]
 fn remote_names_are_validated() {
     let mut config = ModelVaultConfig::default();
-    assert!(config.add_filesystem_remote("bad name", PathBuf::from("x")).is_err());
-    assert!(config.add_filesystem_remote("team-nas", PathBuf::from("x")).is_ok());
+    assert!(config
+        .add_filesystem_remote("bad name", PathBuf::from("x"))
+        .is_err());
+    assert!(config
+        .add_filesystem_remote("team-nas", PathBuf::from("x"))
+        .is_ok());
 }
 
 #[cfg(not(feature = "s3"))]
@@ -77,7 +83,5 @@ fn s3_remote_requires_feature_when_opened() {
     .unwrap();
 
     let error = open_remote_store(&remote).unwrap_err();
-    assert!(error
-        .to_string()
-        .contains("S3 support is not compiled in"));
+    assert!(error.to_string().contains("S3 support is not compiled in"));
 }

@@ -1,10 +1,6 @@
 use std::fs;
 
-use modelvault::{
-    artifact::add_raw_artifact,
-    cas::LocalCas,
-    delta::analyze_delta_potential,
-};
+use modelvault::{artifact::add_raw_artifact, cas::LocalCas, delta::analyze_delta_potential};
 use tempfile::tempdir;
 
 #[test]
@@ -16,14 +12,18 @@ fn delta_analysis_finds_savings_for_small_aligned_changes() {
     let right_path = temp.path().join("right.bin");
 
     let mut state = 0x1234_5678u32;
-    let left = (0..16 * 1024).map(|_| {
-        state ^= state << 13;
-        state ^= state >> 17;
-        state ^= state << 5;
-        state as u8
-    }).collect::<Vec<_>>();
+    let left = (0..16 * 1024)
+        .map(|_| {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            state as u8
+        })
+        .collect::<Vec<_>>();
     let mut right = left.clone();
-    for byte in &mut right[4096..4160] { *byte ^= 0x01; }
+    for byte in &mut right[4096..4160] {
+        *byte ^= 0x01;
+    }
     fs::write(&left_path, left).unwrap();
     fs::write(&right_path, right).unwrap();
 

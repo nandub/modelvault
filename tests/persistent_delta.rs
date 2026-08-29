@@ -51,7 +51,9 @@ fn delta_chains_are_bounded_by_policy() -> anyhow::Result<()> {
 
     let mut manifests = Vec::new();
     for i in 0..4 {
-        if i > 0 { bytes[1000 * i] ^= i as u8; }
+        if i > 0 {
+            bytes[1000 * i] ^= i as u8;
+        }
         let path = dir.path().join(format!("v{i}.bin"));
         fs::write(&path, &bytes)?;
         manifests.push(add_raw_artifact(&path, &cas, 64 * 1024)?.manifest);
@@ -124,7 +126,14 @@ fn gc_preserves_delta_base_dependencies() -> anyhow::Result<()> {
     let cas = LocalCas::open(&store)?;
     let left_result = add_raw_artifact(&base_path, &cas, 64 * 1024)?;
     let right_result = add_raw_artifact(&target_path, &cas, 64 * 1024)?;
-    optimize_delta_storage(&left_result.manifest, &right_result.manifest, &cas, 3, 20, 2)?;
+    optimize_delta_storage(
+        &left_result.manifest,
+        &right_result.manifest,
+        &cas,
+        3,
+        20,
+        2,
+    )?;
 
     // Remove the base manifest. The base object is still reachable through the target delta.
     fs::remove_file(left_result.manifest_path)?;

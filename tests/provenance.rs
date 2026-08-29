@@ -8,7 +8,9 @@ use modelvault::{
 
 #[test]
 fn huggingface_provenance_uses_resolved_snapshot_without_local_cache_path() {
-    let path = Path::new("C:/Users/test/.cache/huggingface/hub/models--org--demo/snapshots/abc123/model.safetensors");
+    let path = Path::new(
+        "C:/Users/test/.cache/huggingface/hub/models--org--demo/snapshots/abc123/model.safetensors",
+    );
     let provenance = huggingface_provenance("org/demo", Some("main"), path, "model.safetensors");
 
     assert_eq!(provenance.provider, "huggingface");
@@ -21,13 +23,18 @@ fn huggingface_provenance_uses_resolved_snapshot_without_local_cache_path() {
         provenance.source_uri.as_deref(),
         Some("hf://org/demo@abc123/model.safetensors")
     );
-    assert!(!serde_json::to_string(&provenance).unwrap().contains("Users/test"));
+    assert!(!serde_json::to_string(&provenance)
+        .unwrap()
+        .contains("Users/test"));
 }
 
 #[test]
 fn snapshot_revision_is_extracted_from_cache_path() {
     assert_eq!(
-        huggingface_snapshot_revision(Path::new("hub/models--org--demo/snapshots/deadbeef/model.safetensors")).as_deref(),
+        huggingface_snapshot_revision(Path::new(
+            "hub/models--org--demo/snapshots/deadbeef/model.safetensors"
+        ))
+        .as_deref(),
         Some("deadbeef")
     );
 }
@@ -57,7 +64,10 @@ fn pointer_carries_manifest_provenance() {
         tensors: vec![],
     };
 
-    assert_eq!(ArtifactPointer::from_manifest(&manifest).provenance, Some(provenance));
+    assert_eq!(
+        ArtifactPointer::from_manifest(&manifest).provenance,
+        Some(provenance)
+    );
 }
 
 #[test]

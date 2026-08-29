@@ -1,6 +1,10 @@
 use std::fs;
 
-use modelvault::{artifact::{add_raw_artifact, materialize, verify_artifact}, cas::LocalCas, manifest::ArtifactManifest};
+use modelvault::{
+    artifact::{add_raw_artifact, materialize, verify_artifact},
+    cas::LocalCas,
+    manifest::ArtifactManifest,
+};
 use tempfile::tempdir;
 
 #[test]

@@ -14,11 +14,13 @@ fn import_target_is_repository_local_and_pointer_matches_logical_name() -> anyho
     )?;
     assert_eq!(
         target,
-        repo.path().join("models/all-MiniLM-L6-v2/model.safetensors")
+        repo.path()
+            .join("models/all-MiniLM-L6-v2/model.safetensors")
     );
     assert_eq!(
         pointer_path_for_target(&target),
-        repo.path().join("models/all-MiniLM-L6-v2/model.safetensors.mvptr")
+        repo.path()
+            .join("models/all-MiniLM-L6-v2/model.safetensors.mvptr")
     );
     #[cfg(windows)]
     assert!(
@@ -31,8 +33,8 @@ fn import_target_is_repository_local_and_pointer_matches_logical_name() -> anyho
 #[test]
 fn import_target_rejects_parent_traversal() -> anyhow::Result<()> {
     let repo = tempdir()?;
-    let err = repository_target_path(repo.path(), Path::new("../outside/model.safetensors"))
-        .unwrap_err();
+    let err =
+        repository_target_path(repo.path(), Path::new("../outside/model.safetensors")).unwrap_err();
     assert!(err.to_string().contains("repository-relative"));
     Ok(())
 }
@@ -40,7 +42,9 @@ fn import_target_rejects_parent_traversal() -> anyhow::Result<()> {
 #[test]
 fn huggingface_cache_resolves_refs_main() -> anyhow::Result<()> {
     let cache = tempdir()?;
-    let repo = cache.path().join("models--sentence-transformers--all-MiniLM-L6-v2");
+    let repo = cache
+        .path()
+        .join("models--sentence-transformers--all-MiniLM-L6-v2");
     let snapshot = repo.join("snapshots").join("abc123");
     fs::create_dir_all(&snapshot)?;
     fs::create_dir_all(repo.join("refs"))?;
@@ -67,13 +71,8 @@ fn huggingface_cache_falls_back_to_available_snapshot() -> anyhow::Result<()> {
     fs::create_dir_all(&snapshot)?;
     fs::write(snapshot.join("weights.safetensors"), b"weights")?;
 
-    let resolved = resolve_hf_cached_file(
-        cache.path(),
-        "org/demo",
-        None,
-        "weights.safetensors",
-    )?
-    .expect("cached file");
+    let resolved = resolve_hf_cached_file(cache.path(), "org/demo", None, "weights.safetensors")?
+        .expect("cached file");
     assert_eq!(resolved, snapshot.join("weights.safetensors"));
     Ok(())
 }
@@ -81,7 +80,10 @@ fn huggingface_cache_falls_back_to_available_snapshot() -> anyhow::Result<()> {
 #[test]
 fn huggingface_default_target_is_repository_friendly() {
     assert_eq!(
-        default_hf_target("sentence-transformers/all-MiniLM-L6-v2", "model.safetensors"),
+        default_hf_target(
+            "sentence-transformers/all-MiniLM-L6-v2",
+            "model.safetensors"
+        ),
         Path::new("models/all-MiniLM-L6-v2/model.safetensors")
     );
 }

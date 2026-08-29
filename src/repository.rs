@@ -121,7 +121,12 @@ pub fn load_manifests(store_root: &Path) -> anyhow::Result<Vec<(PathBuf, Artifac
     for entry in fs::read_dir(&dir)? {
         let entry = entry?;
         let path = entry.path();
-        if path.is_file() && path.extension().and_then(|v| v.to_str()).is_some_and(|v| v.eq_ignore_ascii_case("json")) {
+        if path.is_file()
+            && path
+                .extension()
+                .and_then(|v| v.to_str())
+                .is_some_and(|v| v.eq_ignore_ascii_case("json"))
+        {
             paths.push(path);
         }
     }
@@ -137,7 +142,8 @@ pub fn load_manifests(store_root: &Path) -> anyhow::Result<Vec<(PathBuf, Artifac
 }
 
 fn referenced_object_ids(manifests: &[(PathBuf, ArtifactManifest)]) -> HashSet<String> {
-    manifests.iter()
+    manifests
+        .iter()
         .flat_map(|(_, m)| m.chunks.iter().map(|c| c.object.clone()))
         .collect()
 }
@@ -169,30 +175,39 @@ pub fn fsck(store_root: &Path, deep: bool) -> anyhow::Result<FsckReport> {
         let mut paths = fs::read_dir(&manifest_dir)?
             .filter_map(Result::ok)
             .map(|e| e.path())
-            .filter(|p| p.is_file() && p.extension().and_then(|v| v.to_str()).is_some_and(|v| v.eq_ignore_ascii_case("json")))
+            .filter(|p| {
+                p.is_file()
+                    && p.extension()
+                        .and_then(|v| v.to_str())
+                        .is_some_and(|v| v.eq_ignore_ascii_case("json"))
+            })
             .collect::<Vec<_>>();
         paths.sort();
 
         for path in paths {
             report.manifests_scanned += 1;
             match ArtifactManifest::load(&path) {
-                Ok(manifest) => {
-                    match validate_manifest_structure(&manifest) {
-                        Ok(()) => {
-                            if deep {
-                                match verify_artifact(&manifest, &cas) {
-                                    Ok(()) => report.manifests_ok += 1,
-                                    Err(err) => report.manifest_errors.push(format!("{}: {err}", path.display())),
-                                }
-                            } else {
-                                report.manifests_ok += 1;
+                Ok(manifest) => match validate_manifest_structure(&manifest) {
+                    Ok(()) => {
+                        if deep {
+                            match verify_artifact(&manifest, &cas) {
+                                Ok(()) => report.manifests_ok += 1,
+                                Err(err) => report
+                                    .manifest_errors
+                                    .push(format!("{}: {err}", path.display())),
                             }
-                            valid_manifests.push((path, manifest));
+                        } else {
+                            report.manifests_ok += 1;
                         }
-                        Err(err) => report.manifest_errors.push(format!("{}: {err}", path.display())),
+                        valid_manifests.push((path, manifest));
                     }
-                }
-                Err(err) => report.manifest_errors.push(format!("{}: {err}", path.display())),
+                    Err(err) => report
+                        .manifest_errors
+                        .push(format!("{}: {err}", path.display())),
+                },
+                Err(err) => report
+                    .manifest_errors
+                    .push(format!("{}: {err}", path.display())),
             }
         }
     }
@@ -220,7 +235,10 @@ pub fn fsck(store_root: &Path, deep: bool) -> anyhow::Result<FsckReport> {
     }
 
     let all = cas.list_objects()?;
-    report.orphan_objects = all.iter().filter(|(id, _)| !refs.contains(id.as_str())).count();
+    report.orphan_objects = all
+        .iter()
+        .filter(|(id, _)| !refs.contains(id.as_str()))
+        .count();
     Ok(report)
 }
 
@@ -229,17 +247,66 @@ pub fn storage_report(store_root: &Path) -> anyhow::Result<StorageReport> {
     let manifests = load_manifests(store_root)?;
     let refs = referenced_object_ids_with_delta_dependencies(&cas, &manifests)?;
     let objects = cas.list_objects()?;
-    let mut logical_sizes: HashMap<String,u64> = HashMap::new();
-    for (_,m) in &manifests { for c in &m.chunks { logical_sizes.entry(c.object.clone()).or_insert(c.size); } }
-    for id in &refs { if !logical_sizes.contains_key(id) { let oid=ObjectId::parse(id)?; logical_sizes.insert(id.clone(), cas.read(&oid)?.len() as u64); } }
-    let reachable_bytes = refs.iter().filter_map(|id| logical_sizes.get(id)).copied().sum::<u64>();
-    let reachable_objects = refs.iter().filter(|id| cas.contains(&ObjectId::parse(id).expect("validated object id"))).count();
-    let orphan_ids = objects.iter().filter(|(id,_)| !refs.contains(id.as_str())).map(|(id,_)|id.clone()).collect::<Vec<_>>();
-    let mut orphan_bytes=0u64; for id in &orphan_ids { orphan_bytes=orphan_bytes.saturating_add(cas.representation_sizes(id)?.iter().sum::<u64>()); }
-    let mut duplicate_representation_bytes=0u64;
-    for id in &refs { let oid=ObjectId::parse(id)?; let mut reps=cas.representation_sizes(&oid)?; if reps.len()>1 { reps.sort_unstable(); duplicate_representation_bytes=duplicate_representation_bytes.saturating_add(reps.iter().skip(1).sum::<u64>()); } }
-    let b=cas.physical_storage_breakdown()?;
-    Ok(StorageReport { manifests:manifests.len(), logical_bytes:manifests.iter().map(|(_,m)|m.logical_size).sum(), object_count:objects.len(), physical_bytes:b.total(), reachable_objects, reachable_bytes, orphan_objects:orphan_ids.len(), orphan_bytes, duplicate_representation_bytes, loose_raw_bytes:b.loose_raw_bytes, loose_compressed_bytes:b.loose_compressed_bytes, delta_bytes:b.delta_bytes, pack_data_bytes:b.pack_data_bytes, pack_index_bytes:b.pack_index_bytes, manifest_bytes:b.manifest_bytes, metadata_bytes:b.metadata_bytes })
+    let mut logical_sizes: HashMap<String, u64> = HashMap::new();
+    for (_, m) in &manifests {
+        for c in &m.chunks {
+            logical_sizes.entry(c.object.clone()).or_insert(c.size);
+        }
+    }
+    for id in &refs {
+        if !logical_sizes.contains_key(id) {
+            let oid = ObjectId::parse(id)?;
+            logical_sizes.insert(id.clone(), cas.read(&oid)?.len() as u64);
+        }
+    }
+    let reachable_bytes = refs
+        .iter()
+        .filter_map(|id| logical_sizes.get(id))
+        .copied()
+        .sum::<u64>();
+    let reachable_objects = refs
+        .iter()
+        .filter(|id| cas.contains(&ObjectId::parse(id).expect("validated object id")))
+        .count();
+    let orphan_ids = objects
+        .iter()
+        .filter(|(id, _)| !refs.contains(id.as_str()))
+        .map(|(id, _)| id.clone())
+        .collect::<Vec<_>>();
+    let mut orphan_bytes = 0u64;
+    for id in &orphan_ids {
+        orphan_bytes =
+            orphan_bytes.saturating_add(cas.representation_sizes(id)?.iter().sum::<u64>());
+    }
+    let mut duplicate_representation_bytes = 0u64;
+    for id in &refs {
+        let oid = ObjectId::parse(id)?;
+        let mut reps = cas.representation_sizes(&oid)?;
+        if reps.len() > 1 {
+            reps.sort_unstable();
+            duplicate_representation_bytes =
+                duplicate_representation_bytes.saturating_add(reps.iter().skip(1).sum::<u64>());
+        }
+    }
+    let b = cas.physical_storage_breakdown()?;
+    Ok(StorageReport {
+        manifests: manifests.len(),
+        logical_bytes: manifests.iter().map(|(_, m)| m.logical_size).sum(),
+        object_count: objects.len(),
+        physical_bytes: b.total(),
+        reachable_objects,
+        reachable_bytes,
+        orphan_objects: orphan_ids.len(),
+        orphan_bytes,
+        duplicate_representation_bytes,
+        loose_raw_bytes: b.loose_raw_bytes,
+        loose_compressed_bytes: b.loose_compressed_bytes,
+        delta_bytes: b.delta_bytes,
+        pack_data_bytes: b.pack_data_bytes,
+        pack_index_bytes: b.pack_index_bytes,
+        manifest_bytes: b.manifest_bytes,
+        metadata_bytes: b.metadata_bytes,
+    })
 }
 
 pub fn gc(store_root: &Path, prune: bool) -> anyhow::Result<GcReport> {
@@ -272,7 +339,9 @@ pub fn storage_efficiency_report(store_root: &Path) -> anyhow::Result<StorageEff
     let mut logical_sizes = HashMap::<String, u64>::new();
     for (_, manifest) in &manifests {
         for chunk in &manifest.chunks {
-            logical_sizes.entry(chunk.object.clone()).or_insert(chunk.size);
+            logical_sizes
+                .entry(chunk.object.clone())
+                .or_insert(chunk.size);
         }
     }
     for id in &refs {
@@ -282,7 +351,11 @@ pub fn storage_efficiency_report(store_root: &Path) -> anyhow::Result<StorageEff
         }
     }
 
-    let unique_logical_bytes = manifest_refs.iter().filter_map(|id| logical_sizes.get(id)).copied().sum::<u64>();
+    let unique_logical_bytes = manifest_refs
+        .iter()
+        .filter_map(|id| logical_sizes.get(id))
+        .copied()
+        .sum::<u64>();
     let dedup_savings_bytes = logical_bytes.saturating_sub(unique_logical_bytes);
     let dedup_savings_pct = pct(dedup_savings_bytes, logical_bytes);
 
@@ -290,14 +363,17 @@ pub fn storage_efficiency_report(store_root: &Path) -> anyhow::Result<StorageEff
     let mut primary_encoded_bytes = 0u64;
     for id in &manifest_refs {
         let oid = ObjectId::parse(id)?;
-        full_encoded_bytes = full_encoded_bytes.saturating_add(cas.estimated_full_encoded_size(&oid)?);
-        primary_encoded_bytes = primary_encoded_bytes.saturating_add(cas.estimated_primary_physical_size(&oid)?);
+        full_encoded_bytes =
+            full_encoded_bytes.saturating_add(cas.estimated_full_encoded_size(&oid)?);
+        primary_encoded_bytes =
+            primary_encoded_bytes.saturating_add(cas.estimated_primary_physical_size(&oid)?);
     }
     // Delta bases that are not themselves referenced by a manifest are real
     // physical dependencies and must be included when evaluating delta benefit.
     for id in refs.difference(&manifest_refs) {
         let oid = ObjectId::parse(id)?;
-        primary_encoded_bytes = primary_encoded_bytes.saturating_add(cas.estimated_primary_physical_size(&oid)?);
+        primary_encoded_bytes =
+            primary_encoded_bytes.saturating_add(cas.estimated_primary_physical_size(&oid)?);
     }
     let compression_savings_bytes = unique_logical_bytes.saturating_sub(full_encoded_bytes);
     let compression_savings_pct = pct(compression_savings_bytes, unique_logical_bytes);
@@ -305,7 +381,8 @@ pub fn storage_efficiency_report(store_root: &Path) -> anyhow::Result<StorageEff
     let delta_savings_pct = pct(delta_savings_bytes, full_encoded_bytes);
 
     let storage = storage_report(store_root)?;
-    let metadata_overhead_bytes = storage.pack_index_bytes
+    let metadata_overhead_bytes = storage
+        .pack_index_bytes
         .saturating_add(storage.manifest_bytes)
         .saturating_add(storage.metadata_bytes);
     let net_physical_savings_bytes = logical_bytes as i128 - storage.physical_bytes as i128;
@@ -342,7 +419,11 @@ pub fn analytics_report(store_root: &Path) -> anyhow::Result<RepositoryAnalytics
     // Count each logical object once per artifact, not once per repeated chunk.
     let mut reference_counts = HashMap::<String, usize>::new();
     for (_, manifest) in &manifests {
-        let ids = manifest.chunks.iter().map(|c| c.object.as_str()).collect::<HashSet<_>>();
+        let ids = manifest
+            .chunks
+            .iter()
+            .map(|c| c.object.as_str())
+            .collect::<HashSet<_>>();
         for id in ids {
             *reference_counts.entry(id.to_string()).or_default() += 1;
         }
@@ -408,5 +489,9 @@ pub fn benchmark_snapshot(store_root: &Path) -> anyhow::Result<RepositoryBenchma
 }
 
 fn pct(part: u64, whole: u64) -> f64 {
-    if whole == 0 { 0.0 } else { part as f64 / whole as f64 * 100.0 }
+    if whole == 0 {
+        0.0
+    } else {
+        part as f64 / whole as f64 * 100.0
+    }
 }

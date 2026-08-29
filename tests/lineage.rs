@@ -63,7 +63,10 @@ fn graph_traverses_multiple_generations() {
 
     assert_eq!(graph.parents[0].operation, "quantize");
     assert_eq!(graph.parents[0].parent.parents[0].operation, "fine-tune");
-    assert_eq!(graph.parents[0].parent.parents[0].parent.artifact_id, base.artifact_id);
+    assert_eq!(
+        graph.parents[0].parent.parents[0].parent.artifact_id,
+        base.artifact_id
+    );
 }
 
 #[test]

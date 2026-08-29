@@ -1,5 +1,8 @@
-use std::{fs, io, path::{Path, PathBuf}};
 use serde::{Deserialize, Serialize};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
 
 use crate::manifest::{ArtifactLineageEdge, ArtifactManifest, ArtifactProvenance};
 
@@ -32,7 +35,8 @@ impl ArtifactPointer {
     }
 
     pub fn save(&self, path: impl AsRef<Path>) -> io::Result<()> {
-        let bytes = serde_json::to_vec_pretty(self).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let bytes = serde_json::to_vec_pretty(self)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
         fs::write(path, bytes)
     }
 
@@ -50,13 +54,23 @@ impl ArtifactPointer {
     /// Resolve and validate the manifest referenced by this Git-controlled
     /// pointer. Pointer paths are deliberately restricted to ModelVault's
     /// content-addressed manifest namespace; arbitrary paths are rejected.
-    pub fn resolve_manifest(&self, repository_root: &Path) -> anyhow::Result<(PathBuf, ArtifactManifest)> {
-        anyhow::ensure!(self.version == 1, "unsupported pointer version {}", self.version);
+    pub fn resolve_manifest(
+        &self,
+        repository_root: &Path,
+    ) -> anyhow::Result<(PathBuf, ArtifactManifest)> {
+        anyhow::ensure!(
+            self.version == 1,
+            "unsupported pointer version {}",
+            self.version
+        );
         anyhow::ensure!(
             self.artifact_id.len() == 64 && self.artifact_id.bytes().all(|b| b.is_ascii_hexdigit()),
             "invalid pointer artifact BLAKE3 id"
         );
-        let expected_manifest = format!(".modelvault/manifests/{}.json", self.artifact_id.to_ascii_lowercase());
+        let expected_manifest = format!(
+            ".modelvault/manifests/{}.json",
+            self.artifact_id.to_ascii_lowercase()
+        );
         anyhow::ensure!(
             self.manifest == expected_manifest,
             "pointer manifest must be '{}'",

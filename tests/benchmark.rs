@@ -44,6 +44,8 @@ fn safetensors_benchmark_reports_all_chunking_strategies() -> anyhow::Result<()>
     );
     assert!(rows.iter().all(|row| row.right_size > 0));
     assert!(rows.iter().all(|row| row.reuse_pct.is_finite()));
-    assert!(rows.iter().all(|row| (0.0..=100.0).contains(&row.reuse_pct)));
+    assert!(rows
+        .iter()
+        .all(|row| (0.0..=100.0).contains(&row.reuse_pct)));
     Ok(())
 }

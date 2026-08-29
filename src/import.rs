@@ -1,6 +1,5 @@
 use std::{
-    env,
-    fs,
+    env, fs,
     path::{Component, Path, PathBuf},
     process::Command,
     time::{SystemTime, UNIX_EPOCH},
@@ -34,7 +33,9 @@ pub fn repository_target_path(root: &Path, requested: &Path) -> anyhow::Result<P
     // leaving filesystem side effects for a rejected target and catches symlink escapes.
     let mut existing = parent;
     while !existing.exists() {
-        existing = existing.parent().ok_or_else(|| anyhow::anyhow!("--to has no existing parent"))?;
+        existing = existing
+            .parent()
+            .ok_or_else(|| anyhow::anyhow!("--to has no existing parent"))?;
     }
     let canonical_existing = fs::canonicalize(existing)?;
     if !canonical_existing.starts_with(&canonical_root) {
@@ -68,7 +69,10 @@ pub fn default_hf_cache_dir() -> anyhow::Result<PathBuf> {
     }
 
     if let Some(home) = env::var_os("USERPROFILE").or_else(|| env::var_os("HOME")) {
-        return Ok(PathBuf::from(home).join(".cache").join("huggingface").join("hub"));
+        return Ok(PathBuf::from(home)
+            .join(".cache")
+            .join("huggingface")
+            .join("hub"));
     }
 
     bail!("unable to determine Hugging Face cache directory; use --cache-dir")
@@ -85,7 +89,9 @@ fn cached_file_candidate(repo_dir: &Path, path: PathBuf) -> Option<PathBuf> {
     }
     let canonical_repo = fs::canonicalize(repo_dir).ok()?;
     let canonical_target = fs::canonicalize(&path).ok()?;
-    canonical_target.starts_with(&canonical_repo).then_some(path)
+    canonical_target
+        .starts_with(&canonical_repo)
+        .then_some(path)
 }
 
 fn snapshot_candidate(repo_dir: &Path, revision: &str, filename: &str) -> Option<PathBuf> {
@@ -96,7 +102,10 @@ fn snapshot_candidate(repo_dir: &Path, revision: &str, filename: &str) -> Option
 
     let ref_file = repo_dir.join("refs").join(revision);
     if let Ok(commit) = fs::read_to_string(ref_file) {
-        let candidate = repo_dir.join("snapshots").join(commit.trim()).join(filename);
+        let candidate = repo_dir
+            .join("snapshots")
+            .join(commit.trim())
+            .join(filename);
         if let Some(candidate) = cached_file_candidate(repo_dir, candidate) {
             return Some(candidate);
         }
@@ -209,7 +218,11 @@ pub fn download_hf_file(
     )?;
     if !output.status.success() {
         let stderr = String::from_utf8_lossy(&output.stderr);
-        bail!("hf download failed with status {}: {}", output.status, stderr.trim());
+        bail!(
+            "hf download failed with status {}: {}",
+            output.status,
+            stderr.trim()
+        );
     }
 
     if let Some(path) = resolve_hf_cached_file(cache_dir, repo_id, revision, filename)? {
@@ -217,7 +230,12 @@ pub fn download_hf_file(
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    for line in stdout.lines().rev().map(str::trim).filter(|line| !line.is_empty()) {
+    for line in stdout
+        .lines()
+        .rev()
+        .map(str::trim)
+        .filter(|line| !line.is_empty())
+    {
         let path = PathBuf::from(line);
         if path.is_file() {
             return Ok(path);

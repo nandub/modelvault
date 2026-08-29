@@ -26,13 +26,17 @@ fn zstd_migration_preserves_object_identity_and_bytes() {
     let put = cas.put_bytes(&bytes).unwrap();
     let raw_size = fs::metadata(cas.object_path(&put.id)).unwrap().len();
 
-    let report = cas.migrate_loose_compression(CompressionMode::Zstd, 3).unwrap();
+    let report = cas
+        .migrate_loose_compression(CompressionMode::Zstd, 3)
+        .unwrap();
     assert_eq!(report.objects_rewritten, 1);
     assert!(report.after_bytes < raw_size);
     assert_eq!(cas.read(&put.id).unwrap(), bytes);
     assert!(cas.verify(&put.id).unwrap());
 
-    let report = cas.migrate_loose_compression(CompressionMode::None, 3).unwrap();
+    let report = cas
+        .migrate_loose_compression(CompressionMode::None, 3)
+        .unwrap();
     assert_eq!(report.objects_rewritten, 1);
     assert_eq!(cas.read(&put.id).unwrap(), bytes);
     assert!(cas.verify(&put.id).unwrap());

@@ -1,6 +1,12 @@
-use std::{collections::BTreeMap, path::{Path, PathBuf}, sync::{Arc, Mutex}, thread, time::Instant};
+use std::{
+    collections::BTreeMap,
+    path::{Path, PathBuf},
+    sync::{Arc, Mutex},
+    thread,
+    time::Instant,
+};
 
-use anyhow::{Context, ensure};
+use anyhow::{ensure, Context};
 
 use crate::{
     cas::{LocalCas, ObjectId},
@@ -18,7 +24,10 @@ pub struct SyncOptions {
 
 impl Default for SyncOptions {
     fn default() -> Self {
-        Self { jobs: 4, deep_verify: false }
+        Self {
+            jobs: 4,
+            deep_verify: false,
+        }
     }
 }
 
@@ -103,7 +112,9 @@ pub fn sync_manifest_between(
     let tasks = unique_tasks(manifest)?;
     let task_count = tasks.len();
     let tasks = Arc::new(Mutex::new(tasks.into_iter()));
-    let outcomes = Arc::new(Mutex::new(Vec::<TransferOutcome>::with_capacity(task_count)));
+    let outcomes = Arc::new(Mutex::new(Vec::<TransferOutcome>::with_capacity(
+        task_count,
+    )));
     let failure = Arc::new(Mutex::new(None::<anyhow::Error>));
     let workers = options.jobs.min(task_count.max(1));
 
@@ -119,7 +130,10 @@ pub fn sync_manifest_between(
                 let task = tasks.lock().expect("task mutex poisoned").next();
                 let Some(task) = task else { break };
                 match transfer_one(&task, source, destination, options.deep_verify) {
-                    Ok(outcome) => outcomes.lock().expect("outcome mutex poisoned").push(outcome),
+                    Ok(outcome) => outcomes
+                        .lock()
+                        .expect("outcome mutex poisoned")
+                        .push(outcome),
                     Err(err) => {
                         *failure.lock().expect("failure mutex poisoned") = Some(err);
                         break;
@@ -149,17 +163,24 @@ pub fn sync_manifest_between(
         }
     }
 
-    let reused_ids = outcomes.iter().filter_map(|outcome| match outcome {
-        TransferOutcome::Reused { id } => Some(id.as_str()),
-        TransferOutcome::Copied { .. } => None,
-    }).collect::<std::collections::HashSet<_>>();
-    let bytes_reused = manifest.chunks.iter()
+    let reused_ids = outcomes
+        .iter()
+        .filter_map(|outcome| match outcome {
+            TransferOutcome::Reused { id } => Some(id.as_str()),
+            TransferOutcome::Copied { .. } => None,
+        })
+        .collect::<std::collections::HashSet<_>>();
+    let bytes_reused = manifest
+        .chunks
+        .iter()
         .filter(|chunk| reused_ids.contains(chunk.object.as_str()))
         .map(|chunk| chunk.size)
         .sum();
 
-    ensure!(objects_copied + objects_reused == task_count,
-        "synchronization ended before all objects were processed");
+    ensure!(
+        objects_copied + objects_reused == task_count,
+        "synchronization ended before all objects were processed"
+    );
 
     let manifest_path = destination.save_manifest(manifest)?;
     Ok(SyncResult {
@@ -178,13 +199,26 @@ fn unique_tasks(manifest: &ArtifactManifest) -> anyhow::Result<Vec<TransferTask>
     for chunk in &manifest.chunks {
         let id = ObjectId::parse(&chunk.object)?;
         match unique.get(id.as_str()) {
-            Some(existing) => ensure!(*existing == chunk.size,
-                "object {} appears with inconsistent sizes {} and {}", id, existing, chunk.size),
-            None => { unique.insert(id.to_string(), chunk.size); }
+            Some(existing) => ensure!(
+                *existing == chunk.size,
+                "object {} appears with inconsistent sizes {} and {}",
+                id,
+                existing,
+                chunk.size
+            ),
+            None => {
+                unique.insert(id.to_string(), chunk.size);
+            }
         }
     }
-    unique.into_iter()
-        .map(|(id, size)| Ok(TransferTask { id: ObjectId::parse(&id)?, size }))
+    unique
+        .into_iter()
+        .map(|(id, size)| {
+            Ok(TransferTask {
+                id: ObjectId::parse(&id)?,
+                size,
+            })
+        })
         .collect()
 }
 
@@ -195,27 +229,55 @@ fn transfer_one(
     deep_verify: bool,
 ) -> anyhow::Result<TransferOutcome> {
     let destination_valid = |store: &dyn ObjectStore, id: &ObjectId| {
-        if deep_verify { store.verify_deep(id) } else { store.verify(id) }
+        if deep_verify {
+            store.verify_deep(id)
+        } else {
+            store.verify(id)
+        }
     };
     if destination.contains(&task.id)? && destination_valid(destination, &task.id)? {
-        return Ok(TransferOutcome::Reused { id: task.id.clone() });
+        return Ok(TransferOutcome::Reused {
+            id: task.id.clone(),
+        });
     }
 
-    let bytes = source.read(&task.id)
-        .with_context(|| format!("source '{}' is missing CAS object {}", source.display_name(), task.id))?;
-    ensure!(bytes.len() as u64 == task.size,
+    let bytes = source.read(&task.id).with_context(|| {
+        format!(
+            "source '{}' is missing CAS object {}",
+            source.display_name(),
+            task.id
+        )
+    })?;
+    ensure!(
+        bytes.len() as u64 == task.size,
         "source CAS object {} has {} bytes; manifest expects {}",
-        task.id, bytes.len(), task.size);
-    ensure!(ObjectId::from_bytes(&bytes) == task.id,
-        "source CAS object {} failed BLAKE3 verification", task.id);
+        task.id,
+        bytes.len(),
+        task.size
+    );
+    ensure!(
+        ObjectId::from_bytes(&bytes) == task.id,
+        "source CAS object {} failed BLAKE3 verification",
+        task.id
+    );
 
     if destination.contains(&task.id)? && !destination_valid(destination, &task.id)? {
         destination.remove(&task.id)?;
     }
 
     let put = destination.put_bytes(&bytes)?;
-    ensure!(put.id == task.id, "destination returned unexpected object id {} for {}", put.id, task.id);
-    ensure!(put.size == task.size, "destination returned unexpected size {} for {}", put.size, task.id);
+    ensure!(
+        put.id == task.id,
+        "destination returned unexpected object id {} for {}",
+        put.id,
+        task.id
+    );
+    ensure!(
+        put.size == task.size,
+        "destination returned unexpected size {} for {}",
+        put.size,
+        task.id
+    );
     if put.was_new {
         if deep_verify {
             ensure!(
@@ -227,7 +289,13 @@ fn transfer_one(
         Ok(TransferOutcome::Copied { bytes: task.size })
     } else {
         // Another worker/process may have won the race.
-        ensure!(destination_valid(destination, &task.id)?, "destination object {} failed verification after put", task.id);
-        Ok(TransferOutcome::Reused { id: task.id.clone() })
+        ensure!(
+            destination_valid(destination, &task.id)?,
+            "destination object {} failed verification after put",
+            task.id
+        );
+        Ok(TransferOutcome::Reused {
+            id: task.id.clone(),
+        })
     }
 }

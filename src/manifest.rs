@@ -1,4 +1,7 @@
-use std::{fs, io, path::{Path, PathBuf}};
+use std::{
+    fs, io,
+    path::{Path, PathBuf},
+};
 
 use anyhow::{ensure, Context};
 
@@ -96,28 +99,43 @@ impl ArtifactManifest {
 /// Validate untrusted manifest metadata before it can influence filesystem
 /// allocation, object reads, or materialization offsets.
 pub fn validate_manifest_structure(manifest: &ArtifactManifest) -> anyhow::Result<()> {
-    ensure!(manifest.version == 1, "unsupported manifest version {}", manifest.version);
+    ensure!(
+        manifest.version == 1,
+        "unsupported manifest version {}",
+        manifest.version
+    );
     ensure!(
         manifest.artifact_id.len() == 64
             && manifest.artifact_id.bytes().all(|b| b.is_ascii_hexdigit()),
         "invalid artifact BLAKE3 id"
     );
 
-    ensure!(manifest.chunk_size > 0, "manifest chunk_size must be greater than zero");
+    ensure!(
+        manifest.chunk_size > 0,
+        "manifest chunk_size must be greater than zero"
+    );
 
     for edge in &manifest.lineage {
         ensure!(
             edge.parent_artifact_id.len() == 64
-                && edge.parent_artifact_id.bytes().all(|b| b.is_ascii_hexdigit()),
+                && edge
+                    .parent_artifact_id
+                    .bytes()
+                    .all(|b| b.is_ascii_hexdigit()),
             "invalid lineage parent BLAKE3 id"
         );
         ensure!(
-            !edge.parent_artifact_id.eq_ignore_ascii_case(&manifest.artifact_id),
+            !edge
+                .parent_artifact_id
+                .eq_ignore_ascii_case(&manifest.artifact_id),
             "artifact lineage cannot reference itself"
         );
         let operation = edge.operation.trim();
         ensure!(!operation.is_empty(), "lineage operation cannot be empty");
-        ensure!(operation.len() <= 64, "lineage operation cannot exceed 64 bytes");
+        ensure!(
+            operation.len() <= 64,
+            "lineage operation cannot exceed 64 bytes"
+        );
         if let Some(note) = &edge.note {
             ensure!(note.len() <= 1024, "lineage note cannot exceed 1024 bytes");
         }
@@ -135,7 +153,9 @@ pub fn validate_manifest_structure(manifest: &ArtifactManifest) -> anyhow::Resul
             expected,
             chunk.offset
         );
-        expected = expected.checked_add(chunk.size).context("manifest byte range overflow")?;
+        expected = expected
+            .checked_add(chunk.size)
+            .context("manifest byte range overflow")?;
     }
     ensure!(
         expected == manifest.logical_size,
@@ -149,7 +169,11 @@ pub fn validate_manifest_structure(manifest: &ArtifactManifest) -> anyhow::Resul
             .data_offset
             .checked_add(tensor.data_size)
             .context("tensor byte range overflow")?;
-        ensure!(end <= manifest.logical_size, "tensor '{}' extends beyond artifact", tensor.name);
+        ensure!(
+            end <= manifest.logical_size,
+            "tensor '{}' extends beyond artifact",
+            tensor.name
+        );
     }
     Ok(())
 }

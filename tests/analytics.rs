@@ -34,7 +34,10 @@ fn analytics_reports_cross_artifact_reuse() {
         (a_bytes.len() + b_bytes.len()) as u64
     );
     assert!(report.dedup_savings_bytes >= 7 * 4096);
-    assert!(report.artifacts.iter().any(|artifact| artifact.shared_bytes >= 7 * 4096));
+    assert!(report
+        .artifacts
+        .iter()
+        .any(|artifact| artifact.shared_bytes >= 7 * 4096));
 }
 
 #[test]

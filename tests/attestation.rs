@@ -29,7 +29,10 @@ fn ed25519_attestation_binds_the_complete_manifest_payload() -> anyhow::Result<(
     let attestation = attest_manifest(&added.manifest, &private, "release-test")?;
     let path = temp.path().join("artifact.ed25519.json");
     save_attestation(&attestation, &path)?;
-    assert_eq!(verify_attestation(&added.manifest, &path, &public)?.key_id, "release-test");
+    assert_eq!(
+        verify_attestation(&added.manifest, &path, &public)?.key_id,
+        "release-test"
+    );
 
     let mut changed = added.manifest.clone();
     changed.source_name = "changed-name.bin".to_string();
@@ -43,8 +46,14 @@ fn key_generation_creates_base64_keys_without_overwriting_existing_files() -> an
     let private = temp.path().join("private.key");
     let public = temp.path().join("public.key");
     generate_key_pair(&private, &public)?;
-    assert_eq!(STANDARD.decode(fs::read_to_string(&private)?.trim())?.len(), 32);
-    assert_eq!(STANDARD.decode(fs::read_to_string(&public)?.trim())?.len(), 32);
+    assert_eq!(
+        STANDARD.decode(fs::read_to_string(&private)?.trim())?.len(),
+        32
+    );
+    assert_eq!(
+        STANDARD.decode(fs::read_to_string(&public)?.trim())?.len(),
+        32
+    );
     assert!(generate_key_pair(&private, &public).is_err());
     Ok(())
 }

@@ -41,7 +41,9 @@ pub fn pointer_path_for_source(
     }
 
     if source_is_inside_repo(root, source) {
-        return Ok(crate::pointer::ArtifactPointer::default_pointer_path(source));
+        return Ok(crate::pointer::ArtifactPointer::default_pointer_path(
+            source,
+        ));
     }
 
     let source_name = source
@@ -67,7 +69,12 @@ pub fn ensure_modelvault_gitignore(root: &Path, source: &Path) -> anyhow::Result
     // Git-tracked manifests, so migrate only those exact legacy root-level rules
     // to the narrower physical-storage rules below. Do not rewrite arbitrary
     // user patterns such as `.modelvault/cache-*`.
-    let legacy_rules = [".modelvault", ".modelvault/", "/.modelvault", "/.modelvault/"];
+    let legacy_rules = [
+        ".modelvault",
+        ".modelvault/",
+        "/.modelvault",
+        "/.modelvault/",
+    ];
     let mut lines: Vec<String> = original
         .lines()
         .filter(|line| !legacy_rules.contains(&line.trim()))
@@ -120,7 +127,6 @@ pub fn git_add(paths: &[PathBuf]) -> anyhow::Result<()> {
     Ok(())
 }
 
-
 pub fn git_add_force(paths: &[PathBuf]) -> anyhow::Result<()> {
     let mut cmd = Command::new("git");
     cmd.arg("add").arg("-f").arg("--");
@@ -140,12 +146,22 @@ pub fn install_modelvault_post_checkout_hook(root: &Path, force: bool) -> anyhow
         .current_dir(root)
         .output()
         .context("failed to locate Git hooks directory")?;
-    ensure!(output.status.success(), "unable to locate Git hooks directory");
+    ensure!(
+        output.status.success(),
+        "unable to locate Git hooks directory"
+    );
     let hooks = PathBuf::from(String::from_utf8(output.stdout)?.trim());
-    let hooks = if hooks.is_absolute() { hooks } else { root.join(hooks) };
+    let hooks = if hooks.is_absolute() {
+        hooks
+    } else {
+        root.join(hooks)
+    };
     let hook = hooks.join("post-checkout");
     if hook.exists() && !force {
-        bail!("Git hook already exists at {}; use --force only if it is safe to replace", hook.display());
+        bail!(
+            "Git hook already exists at {}; use --force only if it is safe to replace",
+            hook.display()
+        );
     }
     fs::create_dir_all(&hooks)?;
     fs::write(&hook, "#!/bin/sh\n# Installed by ModelVault; this hook performs no network or filesystem materialization.\nif command -v modelvault >/dev/null 2>&1; then\n  modelvault checkout-advice\nfi\n")?;
@@ -153,18 +169,33 @@ pub fn install_modelvault_post_checkout_hook(root: &Path, force: bool) -> anyhow
 }
 
 pub fn find_modelvault_pointers(root: &Path, limit: usize) -> anyhow::Result<Vec<PathBuf>> {
-    fn visit(root: &Path, current: &Path, found: &mut Vec<PathBuf>, limit: usize) -> anyhow::Result<()> {
+    fn visit(
+        root: &Path,
+        current: &Path,
+        found: &mut Vec<PathBuf>,
+        limit: usize,
+    ) -> anyhow::Result<()> {
         for entry in fs::read_dir(current)? {
             let entry = entry?;
             let path = entry.path();
             let ty = entry.file_type()?;
             if ty.is_dir() {
                 let name = entry.file_name();
-                if name == ".git" || name == ".modelvault" { continue; }
+                if name == ".git" || name == ".modelvault" {
+                    continue;
+                }
                 visit(root, &path, found, limit)?;
-            } else if ty.is_file() && path.extension().and_then(|value| value.to_str()).is_some_and(|value| value.eq_ignore_ascii_case("mvptr")) {
+            } else if ty.is_file()
+                && path
+                    .extension()
+                    .and_then(|value| value.to_str())
+                    .is_some_and(|value| value.eq_ignore_ascii_case("mvptr"))
+            {
                 found.push(path.strip_prefix(root).unwrap_or(&path).to_path_buf());
-                ensure!(found.len() <= limit, "too many .mvptr files; limit is {limit}");
+                ensure!(
+                    found.len() <= limit,
+                    "too many .mvptr files; limit is {limit}"
+                );
             }
         }
         Ok(())

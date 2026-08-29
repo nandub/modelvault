@@ -1,7 +1,6 @@
 use std::{
     collections::HashSet,
-    fmt,
-    fs,
+    fmt, fs,
     fs::OpenOptions,
     io::{self, Read, Seek, SeekFrom, Write},
     path::{Path, PathBuf},
@@ -21,7 +20,10 @@ static TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
 
 fn create_temp_file_near(target: &Path) -> io::Result<(PathBuf, fs::File)> {
     let parent = target.parent().unwrap_or_else(|| Path::new("."));
-    let stem = target.file_name().and_then(|value| value.to_str()).unwrap_or("modelvault");
+    let stem = target
+        .file_name()
+        .and_then(|value| value.to_str())
+        .unwrap_or("modelvault");
     for _ in 0..128 {
         let sequence = TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
         let nanos = SystemTime::now()
@@ -32,7 +34,11 @@ fn create_temp_file_near(target: &Path) -> io::Result<(PathBuf, fs::File)> {
             ".{stem}.tmp-{}-{nanos:x}-{sequence:x}",
             std::process::id()
         ));
-        match OpenOptions::new().write(true).create_new(true).open(&candidate) {
+        match OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .open(&candidate)
+        {
             Ok(file) => return Ok((candidate, file)),
             Err(err) if err.kind() == io::ErrorKind::AlreadyExists => continue,
             Err(err) => return Err(err),
@@ -48,7 +54,10 @@ fn create_temp_file_near(target: &Path) -> io::Result<(PathBuf, fs::File)> {
 fn decode_zstd_bounded<R: Read>(reader: R, expected: u64, label: &str) -> io::Result<Vec<u8>> {
     let decoder = zstd::stream::read::Decoder::new(reader)?;
     let limit = expected.checked_add(1).ok_or_else(|| {
-        io::Error::new(io::ErrorKind::InvalidData, format!("{label} declares an unsupported logical size"))
+        io::Error::new(
+            io::ErrorKind::InvalidData,
+            format!("{label} declares an unsupported logical size"),
+        )
     })?;
     let mut bounded = decoder.take(limit);
     let mut decoded = Vec::new();
@@ -56,7 +65,10 @@ fn decode_zstd_bounded<R: Read>(reader: R, expected: u64, label: &str) -> io::Re
     if decoded.len() as u64 != expected {
         return Err(io::Error::new(
             io::ErrorKind::InvalidData,
-            format!("{label} decoded to {} bytes, expected {expected}", decoded.len()),
+            format!(
+                "{label} decoded to {} bytes, expected {expected}",
+                decoded.len()
+            ),
         ));
     }
     Ok(decoded)
@@ -127,8 +139,12 @@ pub struct RepositoryMetadata {
     pub max_delta_depth: u8,
 }
 
-fn default_delta_min_savings_pct() -> u8 { 20 }
-fn default_max_delta_depth() -> u8 { 2 }
+fn default_delta_min_savings_pct() -> u8 {
+    20
+}
+fn default_max_delta_depth() -> u8 {
+    2
+}
 
 impl Default for RepositoryMetadata {
     fn default() -> Self {
@@ -252,7 +268,6 @@ pub struct PackCompactReport {
     pub index_path: Option<PathBuf>,
 }
 
-
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct DeltaObjectInfo {
     pub base: ObjectId,
@@ -307,7 +322,10 @@ impl LocalCas {
         if metadata.version != 1 {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("unsupported ModelVault repository version {}", metadata.version),
+                format!(
+                    "unsupported ModelVault repository version {}",
+                    metadata.version
+                ),
             ));
         }
         if metadata.object_hash != "blake3" {
@@ -319,7 +337,10 @@ impl LocalCas {
         if metadata.pack_format_version != 1 && metadata.pack_format_version != PACK_VERSION {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                format!("unsupported pack format version {}", metadata.pack_format_version),
+                format!(
+                    "unsupported pack format version {}",
+                    metadata.pack_format_version
+                ),
             ));
         }
         Ok(())
@@ -388,10 +409,16 @@ impl LocalCas {
 
     pub fn set_delta_policy(&mut self, min_savings_pct: u8, max_depth: u8) -> io::Result<()> {
         if min_savings_pct > 100 {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "delta minimum savings percentage must be <= 100"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "delta minimum savings percentage must be <= 100",
+            ));
         }
         if max_depth == 0 {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "maximum delta depth must be greater than zero"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "maximum delta depth must be greater than zero",
+            ));
         }
         self.metadata.delta_min_savings_pct = min_savings_pct;
         self.metadata.max_delta_depth = max_depth;
@@ -405,7 +432,10 @@ impl LocalCas {
 
     pub fn delta_path(&self, id: &ObjectId) -> PathBuf {
         let hex = id.as_str();
-        self.root.join("deltas").join(&hex[..2]).join(format!("{}.mvdelta", &hex[2..]))
+        self.root
+            .join("deltas")
+            .join(&hex[..2])
+            .join(format!("{}.mvdelta", &hex[2..]))
     }
 
     fn delta_contains(&self, id: &ObjectId) -> bool {
@@ -417,7 +447,9 @@ impl LocalCas {
     }
 
     pub fn contains(&self, id: &ObjectId) -> bool {
-        self.loose_contains(id) || self.delta_contains(id) || self.find_pack_entry(id).ok().flatten().is_some()
+        self.loose_contains(id)
+            || self.delta_contains(id)
+            || self.find_pack_entry(id).ok().flatten().is_some()
     }
 
     fn encode_loose(&self, bytes: &[u8]) -> io::Result<Vec<u8>> {
@@ -426,7 +458,10 @@ impl LocalCas {
             CompressionMode::Zstd => {
                 #[cfg(feature = "compression")]
                 {
-                    let compressed = zstd::stream::encode_all(std::io::Cursor::new(bytes), self.metadata.zstd_level)?;
+                    let compressed = zstd::stream::encode_all(
+                        std::io::Cursor::new(bytes),
+                        self.metadata.zstd_level,
+                    )?;
                     let mut encoded = Vec::with_capacity(12 + compressed.len());
                     encoded.extend_from_slice(COMPRESSED_MAGIC);
                     encoded.extend_from_slice(&(bytes.len() as u64).to_le_bytes());
@@ -450,7 +485,10 @@ impl LocalCas {
             return Ok(encoded.to_vec());
         }
         if encoded.len() < 12 {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, "truncated ModelVault compressed object header"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "truncated ModelVault compressed object header",
+            ));
         }
         let expected = u64::from_le_bytes(encoded[4..12].try_into().expect("slice length checked"));
         #[cfg(feature = "compression")]
@@ -476,7 +514,11 @@ impl LocalCas {
         let target = self.object_path(&id);
 
         if self.contains(&id) && self.verify(&id).unwrap_or(false) {
-            return Ok(PutResult { id, size: bytes.len() as u64, was_new: false });
+            return Ok(PutResult {
+                id,
+                size: bytes.len() as u64,
+                was_new: false,
+            });
         }
 
         if let Some(parent) = target.parent() {
@@ -503,7 +545,11 @@ impl LocalCas {
             }
         }
 
-        Ok(PutResult { id, size: bytes.len() as u64, was_new: true })
+        Ok(PutResult {
+            id,
+            size: bytes.len() as u64,
+            was_new: true,
+        })
     }
 
     pub fn read(&self, id: &ObjectId) -> io::Result<Vec<u8>> {
@@ -518,7 +564,10 @@ impl LocalCas {
         }
         if self.delta_contains(id) {
             if !visiting.insert(id.to_string()) {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, format!("delta dependency cycle detected at object {id}")));
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("delta dependency cycle detected at object {id}"),
+                ));
             }
             let result = self.read_delta(id, visiting);
             visiting.remove(id.as_str());
@@ -527,71 +576,136 @@ impl LocalCas {
         if let Some((pack_path, entry)) = self.find_pack_entry(id)? {
             let mut file = fs::File::open(pack_path)?;
             file.seek(SeekFrom::Start(entry.offset))?;
-            let stored_size: usize = entry.stored_size.try_into().map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "pack object too large for this platform"))?;
+            let stored_size: usize = entry.stored_size.try_into().map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "pack object too large for this platform",
+                )
+            })?;
             let mut stored = vec![0u8; stored_size];
             file.read_exact(&mut stored)?;
             let bytes = match entry.encoding {
                 PackEncoding::Raw => stored,
                 PackEncoding::Zstd => {
                     #[cfg(feature = "compression")]
-                    { decode_zstd_bounded(std::io::Cursor::new(stored), entry.size, "packed object")? }
+                    {
+                        decode_zstd_bounded(
+                            std::io::Cursor::new(stored),
+                            entry.size,
+                            "packed object",
+                        )?
+                    }
                     #[cfg(not(feature = "compression"))]
-                    { return Err(io::Error::new(io::ErrorKind::Unsupported, "compressed pack entry requires the 'compression' feature")); }
+                    {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Unsupported,
+                            "compressed pack entry requires the 'compression' feature",
+                        ));
+                    }
                 }
             };
             if bytes.len() as u64 != entry.size {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, format!("packed object {id} decoded to {} bytes; expected {}", bytes.len(), entry.size)));
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!(
+                        "packed object {id} decoded to {} bytes; expected {}",
+                        bytes.len(),
+                        entry.size
+                    ),
+                ));
             }
             return Ok(bytes);
         }
-        Err(io::Error::new(io::ErrorKind::NotFound, format!("object {id} not found")))
+        Err(io::Error::new(
+            io::ErrorKind::NotFound,
+            format!("object {id} not found"),
+        ))
     }
 
     fn parse_delta_record(&self, id: &ObjectId) -> io::Result<(DeltaObjectInfo, Vec<u8>)> {
         let path = self.delta_path(id);
         let encoded = fs::read(&path)?;
         if encoded.len() < DELTA_HEADER_LEN || !encoded.starts_with(DELTA_MAGIC) {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, format!("invalid delta object header for {id}")));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("invalid delta object header for {id}"),
+            ));
         }
         let base_text = std::str::from_utf8(&encoded[4..68])
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
         let base = ObjectId::parse(base_text)?;
         let depth = encoded[68];
-        let logical_size = u64::from_le_bytes(encoded[69..77].try_into().expect("delta header length checked"));
+        let logical_size = u64::from_le_bytes(
+            encoded[69..77]
+                .try_into()
+                .expect("delta header length checked"),
+        );
         if depth == 0 {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, format!("delta object {id} has invalid depth 0")));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("delta object {id} has invalid depth 0"),
+            ));
         }
-        Ok((DeltaObjectInfo {
-            base,
-            depth,
-            logical_size,
-            physical_size: encoded.len() as u64,
-        }, encoded[DELTA_HEADER_LEN..].to_vec()))
+        Ok((
+            DeltaObjectInfo {
+                base,
+                depth,
+                logical_size,
+                physical_size: encoded.len() as u64,
+            },
+            encoded[DELTA_HEADER_LEN..].to_vec(),
+        ))
     }
 
     fn read_delta(&self, id: &ObjectId, visiting: &mut HashSet<String>) -> io::Result<Vec<u8>> {
         let (info, payload) = self.parse_delta_record(id)?;
         let base = self.read_internal(&info.base, visiting)?;
         if base.len() as u64 != info.logical_size {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, format!(
-                "delta base {} has {} bytes; target {} expects {}", info.base, base.len(), id, info.logical_size
-            )));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "delta base {} has {} bytes; target {} expects {}",
+                    info.base,
+                    base.len(),
+                    id,
+                    info.logical_size
+                ),
+            ));
         }
         #[cfg(feature = "compression")]
-        let delta = decode_zstd_bounded(std::io::Cursor::new(payload), info.logical_size, "delta payload")?;
+        let delta = decode_zstd_bounded(
+            std::io::Cursor::new(payload),
+            info.logical_size,
+            "delta payload",
+        )?;
         #[cfg(not(feature = "compression"))]
         let delta: Vec<u8> = {
             let _ = payload;
-            return Err(io::Error::new(io::ErrorKind::Unsupported, "delta objects require the 'compression' feature"));
+            return Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "delta objects require the 'compression' feature",
+            ));
         };
         if delta.len() != base.len() {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, format!(
-                "delta payload for {id} decoded to {} bytes; expected {}", delta.len(), base.len()
-            )));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!(
+                    "delta payload for {id} decoded to {} bytes; expected {}",
+                    delta.len(),
+                    base.len()
+                ),
+            ));
         }
-        let bytes = base.iter().zip(delta.iter()).map(|(a, d)| a ^ d).collect::<Vec<_>>();
+        let bytes = base
+            .iter()
+            .zip(delta.iter())
+            .map(|(a, d)| a ^ d)
+            .collect::<Vec<_>>();
         if ObjectId::from_bytes(&bytes) != *id {
-            return Err(io::Error::new(io::ErrorKind::InvalidData, format!("delta object {id} failed reconstructed BLAKE3 verification")));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                format!("delta object {id} failed reconstructed BLAKE3 verification"),
+            ));
         }
         Ok(bytes)
     }
@@ -615,11 +729,18 @@ impl LocalCas {
         let mut current = start.clone();
         let mut seen = HashSet::new();
         loop {
-            if &current == needle { return Ok(true); }
-            if !seen.insert(current.to_string()) {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, format!("existing delta dependency cycle detected at object {current}")));
+            if &current == needle {
+                return Ok(true);
             }
-            let Some(info) = self.delta_info(&current)? else { return Ok(false); };
+            if !seen.insert(current.to_string()) {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("existing delta dependency cycle detected at object {current}"),
+                ));
+            }
+            let Some(info) = self.delta_info(&current)? else {
+                return Ok(false);
+            };
             current = info.base;
         }
     }
@@ -633,43 +754,109 @@ impl LocalCas {
         max_depth: u8,
     ) -> io::Result<DeltaInstallResult> {
         if target == base {
-            return Ok(DeltaInstallResult { stored: false, full_physical_bytes: 0, delta_physical_bytes: 0, savings_bytes: 0, savings_pct: 0.0, depth: 0, reason: Some("target and base are identical".into()) });
+            return Ok(DeltaInstallResult {
+                stored: false,
+                full_physical_bytes: 0,
+                delta_physical_bytes: 0,
+                savings_bytes: 0,
+                savings_pct: 0.0,
+                depth: 0,
+                reason: Some("target and base are identical".into()),
+            });
         }
         if min_savings_pct > 100 || max_depth == 0 {
-            return Err(io::Error::new(io::ErrorKind::InvalidInput, "invalid delta policy"));
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidInput,
+                "invalid delta policy",
+            ));
         }
         let target_path = self.object_path(target);
         if !target_path.is_file() {
-            return Ok(DeltaInstallResult { stored: false, full_physical_bytes: 0, delta_physical_bytes: 0, savings_bytes: 0, savings_pct: 0.0, depth: 0, reason: Some("target is not a loose full object".into()) });
+            return Ok(DeltaInstallResult {
+                stored: false,
+                full_physical_bytes: 0,
+                delta_physical_bytes: 0,
+                savings_bytes: 0,
+                savings_pct: 0.0,
+                depth: 0,
+                reason: Some("target is not a loose full object".into()),
+            });
         }
         if self.find_pack_entry(target)?.is_some() {
-            return Ok(DeltaInstallResult { stored: false, full_physical_bytes: fs::metadata(&target_path)?.len(), delta_physical_bytes: 0, savings_bytes: 0, savings_pct: 0.0, depth: 0, reason: Some("target is also present in a pack; compact/prune before delta optimization".into()) });
+            return Ok(DeltaInstallResult {
+                stored: false,
+                full_physical_bytes: fs::metadata(&target_path)?.len(),
+                delta_physical_bytes: 0,
+                savings_bytes: 0,
+                savings_pct: 0.0,
+                depth: 0,
+                reason: Some(
+                    "target is also present in a pack; compact/prune before delta optimization"
+                        .into(),
+                ),
+            });
         }
         if !self.contains(base) {
-            return Err(io::Error::new(io::ErrorKind::NotFound, format!("delta base object {base} not found")));
+            return Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                format!("delta base object {base} not found"),
+            ));
         }
         if self.delta_chain_contains(base, target)? {
-            return Ok(DeltaInstallResult { stored: false, full_physical_bytes: fs::metadata(&target_path)?.len(), delta_physical_bytes: 0, savings_bytes: 0, savings_pct: 0.0, depth: 0, reason: Some("delta dependency would create a cycle".into()) });
+            return Ok(DeltaInstallResult {
+                stored: false,
+                full_physical_bytes: fs::metadata(&target_path)?.len(),
+                delta_physical_bytes: 0,
+                savings_bytes: 0,
+                savings_pct: 0.0,
+                depth: 0,
+                reason: Some("delta dependency would create a cycle".into()),
+            });
         }
         let base_depth = self.delta_depth(base)?;
         let depth = base_depth.saturating_add(1);
         if depth > max_depth {
-            return Ok(DeltaInstallResult { stored: false, full_physical_bytes: fs::metadata(&target_path)?.len(), delta_physical_bytes: 0, savings_bytes: 0, savings_pct: 0.0, depth, reason: Some(format!("delta depth {depth} exceeds configured maximum {max_depth}")) });
+            return Ok(DeltaInstallResult {
+                stored: false,
+                full_physical_bytes: fs::metadata(&target_path)?.len(),
+                delta_physical_bytes: 0,
+                savings_bytes: 0,
+                savings_pct: 0.0,
+                depth,
+                reason: Some(format!(
+                    "delta depth {depth} exceeds configured maximum {max_depth}"
+                )),
+            });
         }
         let target_bytes = self.read(target)?;
         let base_bytes = self.read(base)?;
         if target_bytes.len() != base_bytes.len() {
-            return Ok(DeltaInstallResult { stored: false, full_physical_bytes: fs::metadata(&target_path)?.len(), delta_physical_bytes: 0, savings_bytes: 0, savings_pct: 0.0, depth, reason: Some("base and target logical sizes differ".into()) });
+            return Ok(DeltaInstallResult {
+                stored: false,
+                full_physical_bytes: fs::metadata(&target_path)?.len(),
+                delta_physical_bytes: 0,
+                savings_bytes: 0,
+                savings_pct: 0.0,
+                depth,
+                reason: Some("base and target logical sizes differ".into()),
+            });
         }
         #[cfg(feature = "compression")]
         let compressed_delta = {
-            let delta = base_bytes.iter().zip(target_bytes.iter()).map(|(a, b)| a ^ b).collect::<Vec<_>>();
+            let delta = base_bytes
+                .iter()
+                .zip(target_bytes.iter())
+                .map(|(a, b)| a ^ b)
+                .collect::<Vec<_>>();
             zstd::stream::encode_all(std::io::Cursor::new(delta), zstd_level)?
         };
         #[cfg(not(feature = "compression"))]
         let compressed_delta: Vec<u8> = {
             let _ = zstd_level;
-            return Err(io::Error::new(io::ErrorKind::Unsupported, "persistent delta objects require the 'compression' feature"));
+            return Err(io::Error::new(
+                io::ErrorKind::Unsupported,
+                "persistent delta objects require the 'compression' feature",
+            ));
         };
         let mut record = Vec::with_capacity(DELTA_HEADER_LEN + compressed_delta.len());
         record.extend_from_slice(DELTA_MAGIC);
@@ -681,18 +868,45 @@ impl LocalCas {
         let full_physical_bytes = fs::metadata(&target_path)?.len();
         let delta_physical_bytes = record.len() as u64;
         let savings_bytes = full_physical_bytes.saturating_sub(delta_physical_bytes);
-        let savings_pct = if full_physical_bytes == 0 { 0.0 } else { savings_bytes as f64 / full_physical_bytes as f64 * 100.0 };
-        if delta_physical_bytes >= full_physical_bytes || savings_pct + f64::EPSILON < min_savings_pct as f64 {
-            return Ok(DeltaInstallResult { stored: false, full_physical_bytes, delta_physical_bytes, savings_bytes, savings_pct, depth, reason: Some(format!("savings {:.2}% below policy threshold {}%", savings_pct, min_savings_pct)) });
+        let savings_pct = if full_physical_bytes == 0 {
+            0.0
+        } else {
+            savings_bytes as f64 / full_physical_bytes as f64 * 100.0
+        };
+        if delta_physical_bytes >= full_physical_bytes
+            || savings_pct + f64::EPSILON < min_savings_pct as f64
+        {
+            return Ok(DeltaInstallResult {
+                stored: false,
+                full_physical_bytes,
+                delta_physical_bytes,
+                savings_bytes,
+                savings_pct,
+                depth,
+                reason: Some(format!(
+                    "savings {:.2}% below policy threshold {}%",
+                    savings_pct, min_savings_pct
+                )),
+            });
         }
 
         let delta_path = self.delta_path(target);
-        if let Some(parent) = delta_path.parent() { fs::create_dir_all(parent)?; }
+        if let Some(parent) = delta_path.parent() {
+            fs::create_dir_all(parent)?;
+        }
         Self::atomic_write(&delta_path, &record)?;
         let original_encoded = fs::read(&target_path)?;
         fs::remove_file(&target_path)?;
         match self.verify(target) {
-            Ok(true) => Ok(DeltaInstallResult { stored: true, full_physical_bytes, delta_physical_bytes, savings_bytes, savings_pct, depth, reason: None }),
+            Ok(true) => Ok(DeltaInstallResult {
+                stored: true,
+                full_physical_bytes,
+                delta_physical_bytes,
+                savings_bytes,
+                savings_pct,
+                depth,
+                reason: None,
+            }),
             Ok(false) | Err(_) => {
                 let _ = fs::remove_file(&delta_path);
                 Self::atomic_write(&target_path, &original_encoded)?;
@@ -741,7 +955,11 @@ impl LocalCas {
         let mut paths = fs::read_dir(&packs)?
             .filter_map(Result::ok)
             .map(|e| e.path())
-            .filter(|p| p.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("json")))
+            .filter(|p| {
+                p.extension()
+                    .and_then(|e| e.to_str())
+                    .is_some_and(|e| e.eq_ignore_ascii_case("json"))
+            })
             .collect::<Vec<_>>();
         paths.sort();
         for path in paths {
@@ -749,27 +967,45 @@ impl LocalCas {
             let mut index: PackIndex = serde_json::from_slice(&bytes)
                 .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
             if index.version != 1 && index.version != PACK_VERSION {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, format!("unsupported pack index version {}", index.version)));
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("unsupported pack index version {}", index.version),
+                ));
             }
             let pack_name = Path::new(&index.pack_file);
             let mut components = pack_name.components();
             let is_single_name = matches!(components.next(), Some(std::path::Component::Normal(_)))
                 && components.next().is_none();
-            if !is_single_name || pack_name.extension().and_then(|value| value.to_str()) != Some("mvpack") {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, "pack index contains an invalid pack_file path"));
+            if !is_single_name
+                || pack_name.extension().and_then(|value| value.to_str()) != Some("mvpack")
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "pack index contains an invalid pack_file path",
+                ));
             }
             for entry in &mut index.objects {
                 ObjectId::parse(&entry.id)?;
-                if entry.stored_size == 0 { entry.stored_size = entry.size; }
-                if index.version == 1 { entry.encoding = PackEncoding::Raw; }
+                if entry.stored_size == 0 {
+                    entry.stored_size = entry.size;
+                }
+                if index.version == 1 {
+                    entry.encoding = PackEncoding::Raw;
+                }
                 if entry.encoding == PackEncoding::Raw && entry.stored_size != entry.size {
-                    return Err(io::Error::new(io::ErrorKind::InvalidData, format!(
-                        "raw pack object {} stored size {} does not match logical size {}",
-                        entry.id, entry.stored_size, entry.size
-                    )));
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!(
+                            "raw pack object {} stored size {} does not match logical size {}",
+                            entry.id, entry.stored_size, entry.size
+                        ),
+                    ));
                 }
                 entry.offset.checked_add(entry.stored_size).ok_or_else(|| {
-                    io::Error::new(io::ErrorKind::InvalidData, format!("pack object {} byte range overflows", entry.id))
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("pack object {} byte range overflows", entry.id),
+                    )
                 })?;
             }
             result.push((path, index));
@@ -780,20 +1016,32 @@ impl LocalCas {
     fn find_pack_entry(&self, id: &ObjectId) -> io::Result<Option<(PathBuf, PackEntry)>> {
         for (index_path, index) in self.load_pack_indexes()? {
             if let Some(entry) = index.objects.iter().find(|entry| entry.id == id.as_str()) {
-                let pack_path = index_path.parent().unwrap_or_else(|| Path::new(".")).join(&index.pack_file);
+                let pack_path = index_path
+                    .parent()
+                    .unwrap_or_else(|| Path::new("."))
+                    .join(&index.pack_file);
                 if !pack_path.is_file() {
-                    return Err(io::Error::new(io::ErrorKind::NotFound, format!("pack file missing: {}", pack_path.display())));
+                    return Err(io::Error::new(
+                        io::ErrorKind::NotFound,
+                        format!("pack file missing: {}", pack_path.display()),
+                    ));
                 }
                 let pack_len = fs::metadata(&pack_path)?.len();
                 let end = entry.offset.checked_add(entry.stored_size).ok_or_else(|| {
-                    io::Error::new(io::ErrorKind::InvalidData, format!("pack object {} byte range overflows", entry.id))
+                    io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("pack object {} byte range overflows", entry.id),
+                    )
                 })?;
                 if end > pack_len {
-                    return Err(io::Error::new(io::ErrorKind::InvalidData, format!(
-                        "pack object {} extends beyond {}",
-                        entry.id,
-                        pack_path.display()
-                    )));
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!(
+                            "pack object {} extends beyond {}",
+                            entry.id,
+                            pack_path.display()
+                        ),
+                    ));
                 }
                 return Ok(Some((pack_path, entry.clone())));
             }
@@ -803,21 +1051,34 @@ impl LocalCas {
 
     fn list_delta_objects(&self) -> io::Result<Vec<(ObjectId, u64)>> {
         let deltas = self.root.join("deltas");
-        if !deltas.exists() { return Ok(Vec::new()); }
+        if !deltas.exists() {
+            return Ok(Vec::new());
+        }
         let mut result = Vec::new();
         for fanout in fs::read_dir(deltas)? {
             let fanout = fanout?;
-            if !fanout.path().is_dir() { continue; }
+            if !fanout.path().is_dir() {
+                continue;
+            }
             let prefix = fanout.file_name().to_string_lossy().to_string();
-            if prefix.len() != 2 || !prefix.bytes().all(|b| b.is_ascii_hexdigit()) { continue; }
+            if prefix.len() != 2 || !prefix.bytes().all(|b| b.is_ascii_hexdigit()) {
+                continue;
+            }
             for entry in fs::read_dir(fanout.path())? {
                 let entry = entry?;
                 let path = entry.path();
-                if !path.is_file() || path.extension().and_then(|v| v.to_str()) != Some("mvdelta") { continue; }
-                let stem = path.file_stem().and_then(|v| v.to_str()).unwrap_or_default();
+                if !path.is_file() || path.extension().and_then(|v| v.to_str()) != Some("mvdelta") {
+                    continue;
+                }
+                let stem = path
+                    .file_stem()
+                    .and_then(|v| v.to_str())
+                    .unwrap_or_default();
                 let full = format!("{prefix}{stem}");
                 if let Ok(id) = ObjectId::parse(&full) {
-                    if let Some(info) = self.delta_info(&id)? { result.push((id, info.logical_size)); }
+                    if let Some(info) = self.delta_info(&id)? {
+                        result.push((id, info.logical_size));
+                    }
                 }
             }
         }
@@ -828,10 +1089,18 @@ impl LocalCas {
     pub fn list_objects(&self) -> io::Result<Vec<(ObjectId, u64)>> {
         let loose = self.list_loose_objects()?;
         let mut result = Vec::with_capacity(loose.len());
-        for (id, _) in loose { let logical_size = self.read(&id)?.len() as u64; result.push((id, logical_size)); }
-        let mut seen = result.iter().map(|(id, _)| id.to_string()).collect::<HashSet<_>>();
+        for (id, _) in loose {
+            let logical_size = self.read(&id)?.len() as u64;
+            result.push((id, logical_size));
+        }
+        let mut seen = result
+            .iter()
+            .map(|(id, _)| id.to_string())
+            .collect::<HashSet<_>>();
         for (id, logical_size) in self.list_delta_objects()? {
-            if seen.insert(id.to_string()) { result.push((id, logical_size)); }
+            if seen.insert(id.to_string()) {
+                result.push((id, logical_size));
+            }
         }
         for (_, index) in self.load_pack_indexes()? {
             for entry in index.objects {
@@ -862,9 +1131,15 @@ impl LocalCas {
         }
         let mut removed = false;
         let loose = self.object_path(id);
-        if loose.is_file() { fs::remove_file(loose)?; removed = true; }
+        if loose.is_file() {
+            fs::remove_file(loose)?;
+            removed = true;
+        }
         let delta = self.delta_path(id);
-        if delta.is_file() { fs::remove_file(delta)?; removed = true; }
+        if delta.is_file() {
+            fs::remove_file(delta)?;
+            removed = true;
+        }
         Ok(removed)
     }
 
@@ -873,7 +1148,11 @@ impl LocalCas {
         Ok(ObjectId::from_bytes(&bytes) == *id)
     }
 
-    pub fn migrate_loose_compression(&mut self, mode: CompressionMode, zstd_level: i32) -> io::Result<CompressionMigrationReport> {
+    pub fn migrate_loose_compression(
+        &mut self,
+        mode: CompressionMode,
+        zstd_level: i32,
+    ) -> io::Result<CompressionMigrationReport> {
         let objects = self.list_loose_objects()?;
         let mut report = CompressionMigrationReport::default();
         let previous_mode = self.metadata.loose_compression;
@@ -889,13 +1168,19 @@ impl LocalCas {
         for (id, before, bytes) in decoded {
             if ObjectId::from_bytes(&bytes) != id {
                 self.set_compression(previous_mode, previous_level)?;
-                return Err(io::Error::new(io::ErrorKind::InvalidData, format!("object {id} failed verification before migration")));
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("object {id} failed verification before migration"),
+                ));
             }
             let encoded = self.encode_loose(&bytes)?;
             Self::atomic_write(&self.object_path(&id), &encoded)?;
             if !self.verify(&id)? {
                 self.set_compression(previous_mode, previous_level)?;
-                return Err(io::Error::new(io::ErrorKind::InvalidData, format!("object {id} failed verification after migration")));
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("object {id} failed verification after migration"),
+                ));
             }
             report.objects_rewritten += 1;
             report.logical_bytes = report.logical_bytes.saturating_add(bytes.len() as u64);
@@ -908,8 +1193,11 @@ impl LocalCas {
     fn encode_pack_payload(&self, bytes: &[u8]) -> io::Result<(PackEncoding, Vec<u8>)> {
         #[cfg(feature = "compression")]
         {
-            let compressed = zstd::stream::encode_all(std::io::Cursor::new(bytes), self.metadata.zstd_level)?;
-            if compressed.len() < bytes.len() { return Ok((PackEncoding::Zstd, compressed)); }
+            let compressed =
+                zstd::stream::encode_all(std::io::Cursor::new(bytes), self.metadata.zstd_level)?;
+            if compressed.len() < bytes.len() {
+                return Ok((PackEncoding::Zstd, compressed));
+            }
         }
         Ok((PackEncoding::Raw, bytes.to_vec()))
     }
@@ -919,33 +1207,79 @@ impl LocalCas {
         for (id, _) in self.list_loose_objects()? {
             let path = self.object_path(&id);
             let bytes = fs::read(&path)?;
-            if bytes.starts_with(COMPRESSED_MAGIC) { r.loose_compressed_bytes = r.loose_compressed_bytes.saturating_add(bytes.len() as u64); }
-            else { r.loose_raw_bytes = r.loose_raw_bytes.saturating_add(bytes.len() as u64); }
+            if bytes.starts_with(COMPRESSED_MAGIC) {
+                r.loose_compressed_bytes =
+                    r.loose_compressed_bytes.saturating_add(bytes.len() as u64);
+            } else {
+                r.loose_raw_bytes = r.loose_raw_bytes.saturating_add(bytes.len() as u64);
+            }
         }
         let deltas = self.root.join("deltas");
         if deltas.exists() {
             for fanout in fs::read_dir(deltas)? {
-                let fanout=fanout?; if !fanout.path().is_dir(){continue;}
-                for e in fs::read_dir(fanout.path())? { let e=e?; if e.path().is_file(){ r.delta_bytes=r.delta_bytes.saturating_add(e.metadata()?.len()); } }
+                let fanout = fanout?;
+                if !fanout.path().is_dir() {
+                    continue;
+                }
+                for e in fs::read_dir(fanout.path())? {
+                    let e = e?;
+                    if e.path().is_file() {
+                        r.delta_bytes = r.delta_bytes.saturating_add(e.metadata()?.len());
+                    }
+                }
             }
         }
-        let packs=self.root.join("packs");
-        if packs.exists(){
-            for e in fs::read_dir(packs)? { let e=e?; let p=e.path(); if !p.is_file(){continue;} let n=e.metadata()?.len();
-                match p.extension().and_then(|v|v.to_str()) { Some("mvpack")=>r.pack_data_bytes=r.pack_data_bytes.saturating_add(n), Some("json")=>r.pack_index_bytes=r.pack_index_bytes.saturating_add(n), _=>{} }
+        let packs = self.root.join("packs");
+        if packs.exists() {
+            for e in fs::read_dir(packs)? {
+                let e = e?;
+                let p = e.path();
+                if !p.is_file() {
+                    continue;
+                }
+                let n = e.metadata()?.len();
+                match p.extension().and_then(|v| v.to_str()) {
+                    Some("mvpack") => r.pack_data_bytes = r.pack_data_bytes.saturating_add(n),
+                    Some("json") => r.pack_index_bytes = r.pack_index_bytes.saturating_add(n),
+                    _ => {}
+                }
             }
         }
-        let manifests=self.root.join("manifests");
-        if manifests.exists(){ for e in fs::read_dir(manifests)? { let e=e?; if e.path().is_file(){r.manifest_bytes=r.manifest_bytes.saturating_add(e.metadata()?.len());} } }
-        for name in [REPOSITORY_FILE, "config.json"] { let p=self.root.join(name); if p.is_file(){r.metadata_bytes=r.metadata_bytes.saturating_add(fs::metadata(p)?.len());} }
+        let manifests = self.root.join("manifests");
+        if manifests.exists() {
+            for e in fs::read_dir(manifests)? {
+                let e = e?;
+                if e.path().is_file() {
+                    r.manifest_bytes = r.manifest_bytes.saturating_add(e.metadata()?.len());
+                }
+            }
+        }
+        for name in [REPOSITORY_FILE, "config.json"] {
+            let p = self.root.join(name);
+            if p.is_file() {
+                r.metadata_bytes = r.metadata_bytes.saturating_add(fs::metadata(p)?.len());
+            }
+        }
         Ok(r)
     }
 
     pub fn representation_sizes(&self, id: &ObjectId) -> io::Result<Vec<u64>> {
-        let mut v=Vec::new();
-        let p=self.object_path(id); if p.is_file(){v.push(fs::metadata(p)?.len());}
-        let d=self.delta_path(id); if d.is_file(){v.push(fs::metadata(d)?.len());}
-        for (_, idx) in self.load_pack_indexes()? { for e in idx.objects { if e.id==id.as_str(){v.push(e.stored_size);} } }
+        let mut v = Vec::new();
+        let p = self.object_path(id);
+        if p.is_file() {
+            v.push(fs::metadata(p)?.len());
+        }
+        let d = self.delta_path(id);
+        if d.is_file() {
+            v.push(fs::metadata(d)?.len());
+        }
+        for (_, idx) in self.load_pack_indexes()? {
+            for e in idx.objects {
+                if e.id == id.as_str() {
+                    v.push(e.stored_size);
+                }
+            }
+        }
         Ok(v)
     }
 
@@ -960,14 +1294,20 @@ impl LocalCas {
     /// Return the on-disk size of a persistent delta representation, if one exists.
     pub fn delta_physical_size(&self, id: &ObjectId) -> io::Result<Option<u64>> {
         let path = self.delta_path(id);
-        if path.is_file() { Ok(Some(fs::metadata(path)?.len())) } else { Ok(None) }
+        if path.is_file() {
+            Ok(Some(fs::metadata(path)?.len()))
+        } else {
+            Ok(None)
+        }
     }
 
     /// Estimate the smallest primary representation ModelVault would retain for
     /// this logical object: full compressed/raw pack entry or an existing delta.
     pub fn estimated_primary_physical_size(&self, id: &ObjectId) -> io::Result<u64> {
         let full = self.estimated_full_encoded_size(id)?;
-        Ok(self.delta_physical_size(id)?.map_or(full, |delta| delta.min(full)))
+        Ok(self
+            .delta_physical_size(id)?
+            .map_or(full, |delta| delta.min(full)))
     }
 
     pub fn repack(&self, prune_loose: bool) -> io::Result<RepackReport> {
@@ -976,11 +1316,15 @@ impl LocalCas {
             return Ok(RepackReport::default());
         }
 
-        let packed_ids = self.load_pack_indexes()?
+        let packed_ids = self
+            .load_pack_indexes()?
             .into_iter()
             .flat_map(|(_, idx)| idx.objects.into_iter().map(|e| e.id))
             .collect::<HashSet<_>>();
-        let candidates = loose.into_iter().filter(|(id, _)| !packed_ids.contains(id.as_str())).collect::<Vec<_>>();
+        let candidates = loose
+            .into_iter()
+            .filter(|(id, _)| !packed_ids.contains(id.as_str()))
+            .collect::<Vec<_>>();
         if candidates.is_empty() {
             return Ok(RepackReport::default());
         }
@@ -1005,19 +1349,33 @@ impl LocalCas {
                 let bytes = self.read(id)?;
                 if ObjectId::from_bytes(&bytes) != *id {
                     let _ = fs::remove_file(&pack_tmp);
-                    return Err(io::Error::new(io::ErrorKind::InvalidData, format!("object {id} failed verification before repack")));
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("object {id} failed verification before repack"),
+                    ));
                 }
                 let (encoding, payload) = self.encode_pack_payload(&bytes)?;
                 output.write_all(&payload)?;
-                entries.push(PackEntry { id: id.to_string(), offset, size: bytes.len() as u64, stored_size: payload.len() as u64, encoding });
+                entries.push(PackEntry {
+                    id: id.to_string(),
+                    offset,
+                    size: bytes.len() as u64,
+                    stored_size: payload.len() as u64,
+                    encoding,
+                });
                 offset = offset.saturating_add(payload.len() as u64);
             }
             output.sync_all()?;
         }
         drop(output);
         fs::rename(&pack_tmp, &pack_path)?;
-        let index = PackIndex { version: PACK_VERSION, pack_file: pack_file_name, objects: entries.clone() };
-        let index_bytes = serde_json::to_vec_pretty(&index).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let index = PackIndex {
+            version: PACK_VERSION,
+            pack_file: pack_file_name,
+            objects: entries.clone(),
+        };
+        let index_bytes = serde_json::to_vec_pretty(&index)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
         Self::atomic_write(&index_path, &index_bytes)?;
 
         // Verify directly against the new pack before deleting any loose object.
@@ -1026,9 +1384,32 @@ impl LocalCas {
             file.seek(SeekFrom::Start(entry.offset))?;
             let mut stored = vec![0u8; entry.stored_size as usize];
             file.read_exact(&mut stored)?;
-            let bytes = match entry.encoding { PackEncoding::Raw => stored, PackEncoding::Zstd => { #[cfg(feature="compression")] { decode_zstd_bounded(std::io::Cursor::new(stored), entry.size, "packed object")? } #[cfg(not(feature="compression"))] { return Err(io::Error::new(io::ErrorKind::Unsupported,"compressed pack entry requires compression feature")); } } };
-            if bytes.len() as u64 != entry.size || ObjectId::from_bytes(&bytes).as_str() != entry.id {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, format!("packed object {} failed verification", entry.id)));
+            let bytes = match entry.encoding {
+                PackEncoding::Raw => stored,
+                PackEncoding::Zstd => {
+                    #[cfg(feature = "compression")]
+                    {
+                        decode_zstd_bounded(
+                            std::io::Cursor::new(stored),
+                            entry.size,
+                            "packed object",
+                        )?
+                    }
+                    #[cfg(not(feature = "compression"))]
+                    {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Unsupported,
+                            "compressed pack entry requires compression feature",
+                        ));
+                    }
+                }
+            };
+            if bytes.len() as u64 != entry.size || ObjectId::from_bytes(&bytes).as_str() != entry.id
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("packed object {} failed verification", entry.id),
+                ));
             }
         }
 
@@ -1058,9 +1439,14 @@ impl LocalCas {
         let mut report = PackVerifyReport::default();
         for (index_path, index) in self.load_pack_indexes()? {
             report.packs_scanned += 1;
-            let pack_path = index_path.parent().unwrap_or_else(|| Path::new(".")).join(&index.pack_file);
+            let pack_path = index_path
+                .parent()
+                .unwrap_or_else(|| Path::new("."))
+                .join(&index.pack_file);
             if !pack_path.is_file() {
-                report.errors.push(format!("missing pack file {}", pack_path.display()));
+                report
+                    .errors
+                    .push(format!("missing pack file {}", pack_path.display()));
                 continue;
             }
             let pack_len = fs::metadata(&pack_path)?.len();
@@ -1069,18 +1455,30 @@ impl LocalCas {
                 let end = match entry.offset.checked_add(entry.stored_size) {
                     Some(v) => v,
                     None => {
-                        report.errors.push(format!("{}: object {} range overflows", index_path.display(), entry.id));
+                        report.errors.push(format!(
+                            "{}: object {} range overflows",
+                            index_path.display(),
+                            entry.id
+                        ));
                         continue;
                     }
                 };
                 if end > pack_len {
-                    report.errors.push(format!("{}: object {} extends beyond pack", index_path.display(), entry.id));
+                    report.errors.push(format!(
+                        "{}: object {} extends beyond pack",
+                        index_path.display(),
+                        entry.id
+                    ));
                     continue;
                 }
                 let size: usize = match entry.stored_size.try_into() {
                     Ok(v) => v,
                     Err(_) => {
-                        report.errors.push(format!("{}: object {} too large for this platform", index_path.display(), entry.id));
+                        report.errors.push(format!(
+                            "{}: object {} too large for this platform",
+                            index_path.display(),
+                            entry.id
+                        ));
                         continue;
                     }
                 };
@@ -1090,14 +1488,40 @@ impl LocalCas {
                 let bytes = match entry.encoding {
                     PackEncoding::Raw => stored,
                     PackEncoding::Zstd => {
-                        #[cfg(feature="compression")] { decode_zstd_bounded(std::io::Cursor::new(stored), entry.size, "packed object")? }
-                        #[cfg(not(feature="compression"))] { report.errors.push(format!("{}: object {} requires compression feature", index_path.display(), entry.id)); continue; }
+                        #[cfg(feature = "compression")]
+                        {
+                            decode_zstd_bounded(
+                                std::io::Cursor::new(stored),
+                                entry.size,
+                                "packed object",
+                            )?
+                        }
+                        #[cfg(not(feature = "compression"))]
+                        {
+                            report.errors.push(format!(
+                                "{}: object {} requires compression feature",
+                                index_path.display(),
+                                entry.id
+                            ));
+                            continue;
+                        }
                     }
                 };
-                if bytes.len() as u64 != entry.size { report.errors.push(format!("{}: object {} decoded size mismatch", index_path.display(), entry.id)); continue; }
+                if bytes.len() as u64 != entry.size {
+                    report.errors.push(format!(
+                        "{}: object {} decoded size mismatch",
+                        index_path.display(),
+                        entry.id
+                    ));
+                    continue;
+                }
                 let actual = ObjectId::from_bytes(&bytes);
                 if actual.as_str() != entry.id {
-                    report.errors.push(format!("{}: object {} hash mismatch", index_path.display(), entry.id));
+                    report.errors.push(format!(
+                        "{}: object {} hash mismatch",
+                        index_path.display(),
+                        entry.id
+                    ));
                     continue;
                 }
                 report.objects_verified += 1;
@@ -1107,7 +1531,11 @@ impl LocalCas {
         Ok(report)
     }
 
-    pub fn compact_packs(&self, prune_old: bool, prune_loose: bool) -> io::Result<PackCompactReport> {
+    pub fn compact_packs(
+        &self,
+        prune_old: bool,
+        prune_loose: bool,
+    ) -> io::Result<PackCompactReport> {
         let objects = self.list_objects()?;
         if objects.is_empty() {
             return Ok(PackCompactReport::default());
@@ -1134,11 +1562,20 @@ impl LocalCas {
                 let bytes = self.read(id)?;
                 if ObjectId::from_bytes(&bytes) != *id {
                     let _ = fs::remove_file(&pack_tmp);
-                    return Err(io::Error::new(io::ErrorKind::InvalidData, format!("object {id} failed verification before compaction")));
+                    return Err(io::Error::new(
+                        io::ErrorKind::InvalidData,
+                        format!("object {id} failed verification before compaction"),
+                    ));
                 }
                 let (encoding, payload) = self.encode_pack_payload(&bytes)?;
                 output.write_all(&payload)?;
-                entries.push(PackEntry { id: id.to_string(), offset, size: bytes.len() as u64, stored_size: payload.len() as u64, encoding });
+                entries.push(PackEntry {
+                    id: id.to_string(),
+                    offset,
+                    size: bytes.len() as u64,
+                    stored_size: payload.len() as u64,
+                    encoding,
+                });
                 offset = offset.saturating_add(payload.len() as u64);
             }
             output.sync_all()?;
@@ -1149,20 +1586,53 @@ impl LocalCas {
         } else {
             fs::rename(&pack_tmp, &pack_path)?;
         }
-        let index = PackIndex { version: PACK_VERSION, pack_file: pack_file_name.clone(), objects: entries.clone() };
-        let index_bytes = serde_json::to_vec_pretty(&index).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+        let index = PackIndex {
+            version: PACK_VERSION,
+            pack_file: pack_file_name.clone(),
+            objects: entries.clone(),
+        };
+        let index_bytes = serde_json::to_vec_pretty(&index)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
         Self::atomic_write(&index_path, &index_bytes)?;
 
         // Verify the new pack before any destructive cleanup.
         let mut file = fs::File::open(&pack_path)?;
         for entry in &entries {
             file.seek(SeekFrom::Start(entry.offset))?;
-            let size: usize = entry.stored_size.try_into().map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "pack object too large for this platform"))?;
+            let size: usize = entry.stored_size.try_into().map_err(|_| {
+                io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    "pack object too large for this platform",
+                )
+            })?;
             let mut stored = vec![0u8; size];
             file.read_exact(&mut stored)?;
-            let bytes = match entry.encoding { PackEncoding::Raw => stored, PackEncoding::Zstd => { #[cfg(feature="compression")] { decode_zstd_bounded(std::io::Cursor::new(stored), entry.size, "packed object")? } #[cfg(not(feature="compression"))] { return Err(io::Error::new(io::ErrorKind::Unsupported,"compressed pack entry requires compression feature")); } } };
-            if bytes.len() as u64 != entry.size || ObjectId::from_bytes(&bytes).as_str() != entry.id {
-                return Err(io::Error::new(io::ErrorKind::InvalidData, format!("compacted object {} failed verification", entry.id)));
+            let bytes = match entry.encoding {
+                PackEncoding::Raw => stored,
+                PackEncoding::Zstd => {
+                    #[cfg(feature = "compression")]
+                    {
+                        decode_zstd_bounded(
+                            std::io::Cursor::new(stored),
+                            entry.size,
+                            "packed object",
+                        )?
+                    }
+                    #[cfg(not(feature = "compression"))]
+                    {
+                        return Err(io::Error::new(
+                            io::ErrorKind::Unsupported,
+                            "compressed pack entry requires compression feature",
+                        ));
+                    }
+                }
+            };
+            if bytes.len() as u64 != entry.size || ObjectId::from_bytes(&bytes).as_str() != entry.id
+            {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("compacted object {} failed verification", entry.id),
+                ));
             }
         }
 
@@ -1183,7 +1653,9 @@ impl LocalCas {
                 if path == pack_path || path == index_path || !path.is_file() {
                     continue;
                 }
-                if path.extension().and_then(|e| e.to_str()).is_some_and(|e| e.eq_ignore_ascii_case("mvpack") || e.eq_ignore_ascii_case("json")) {
+                if path.extension().and_then(|e| e.to_str()).is_some_and(|e| {
+                    e.eq_ignore_ascii_case("mvpack") || e.eq_ignore_ascii_case("json")
+                }) {
                     fs::remove_file(path)?;
                     report.old_pack_files_removed += 1;
                 }
@@ -1209,27 +1681,93 @@ impl LocalCas {
     pub fn optimize_representations(&self, dry_run: bool) -> io::Result<OptimizeReport> {
         let objects = self.list_objects()?;
         let before = self.physical_storage_breakdown()?.total();
-        if objects.is_empty() { return Ok(OptimizeReport { dry_run, before_bytes: before, estimated_after_bytes: before, ..Default::default() }); }
-        let mut pack_candidates: Vec<(ObjectId, Vec<u8>, PackEncoding, Vec<u8>)> = Vec::new();
-        let mut deltas_retained=0usize;
-        let mut estimated=0u64;
-        for (id, _) in &objects {
-            let bytes=self.read(id)?;
-            let (encoding,payload)=self.encode_pack_payload(&bytes)?;
-            let pack_size=payload.len() as u64;
-            let delta_size=if self.delta_path(id).is_file(){Some(fs::metadata(self.delta_path(id))?.len())}else{None};
-            if delta_size.is_some_and(|d| d < pack_size) { deltas_retained+=1; estimated=estimated.saturating_add(delta_size.unwrap()); }
-            else { estimated=estimated.saturating_add(pack_size); pack_candidates.push((id.clone(),bytes,encoding,payload)); }
+        if objects.is_empty() {
+            return Ok(OptimizeReport {
+                dry_run,
+                before_bytes: before,
+                estimated_after_bytes: before,
+                ..Default::default()
+            });
         }
-        let mut report=OptimizeReport{dry_run,objects_considered:objects.len(),objects_packed:pack_candidates.len(),deltas_retained,before_bytes:before,estimated_after_bytes:estimated,..Default::default()};
-        if dry_run { return Ok(report); }
-        let packs_dir=self.root.join("packs"); fs::create_dir_all(&packs_dir)?;
-        let mut h=blake3::Hasher::new(); h.update(b"optimize-v2"); for (id,_,_,_) in &pack_candidates{h.update(id.as_str().as_bytes());}
-        let pid=h.finalize().to_hex().to_string(); let pf=format!("pack-{pid}.mvpack"); let ix=format!("pack-{pid}.idx.json");
-        let pp=packs_dir.join(&pf); let ip=packs_dir.join(&ix); let (tmp, mut out)=create_temp_file_near(&pp)?;
-        let mut entries=Vec::new(); let mut offset=0u64; { for (id,bytes,encoding,payload) in &pack_candidates { out.write_all(payload)?; entries.push(PackEntry{id:id.to_string(),offset,size:bytes.len() as u64,stored_size:payload.len() as u64,encoding:*encoding}); offset=offset.saturating_add(payload.len() as u64); } out.sync_all()?; }
-        drop(out); fs::rename(&tmp,&pp)?; let idx=PackIndex{version:PACK_VERSION,pack_file:pf,objects:entries}; Self::atomic_write(&ip,&serde_json::to_vec_pretty(&idx).map_err(|e|io::Error::new(io::ErrorKind::InvalidData,e))?)?;
-        if !self.verify_packs()?.is_ok(){return Err(io::Error::new(io::ErrorKind::InvalidData,"optimized pack verification failed"));}
+        let mut pack_candidates: Vec<(ObjectId, Vec<u8>, PackEncoding, Vec<u8>)> = Vec::new();
+        let mut deltas_retained = 0usize;
+        let mut estimated = 0u64;
+        for (id, _) in &objects {
+            let bytes = self.read(id)?;
+            let (encoding, payload) = self.encode_pack_payload(&bytes)?;
+            let pack_size = payload.len() as u64;
+            let delta_size = if self.delta_path(id).is_file() {
+                Some(fs::metadata(self.delta_path(id))?.len())
+            } else {
+                None
+            };
+            if delta_size.is_some_and(|d| d < pack_size) {
+                deltas_retained += 1;
+                estimated = estimated.saturating_add(delta_size.unwrap());
+            } else {
+                estimated = estimated.saturating_add(pack_size);
+                pack_candidates.push((id.clone(), bytes, encoding, payload));
+            }
+        }
+        let mut report = OptimizeReport {
+            dry_run,
+            objects_considered: objects.len(),
+            objects_packed: pack_candidates.len(),
+            deltas_retained,
+            before_bytes: before,
+            estimated_after_bytes: estimated,
+            ..Default::default()
+        };
+        if dry_run {
+            return Ok(report);
+        }
+        let packs_dir = self.root.join("packs");
+        fs::create_dir_all(&packs_dir)?;
+        let mut h = blake3::Hasher::new();
+        h.update(b"optimize-v2");
+        for (id, _, _, _) in &pack_candidates {
+            h.update(id.as_str().as_bytes());
+        }
+        let pid = h.finalize().to_hex().to_string();
+        let pf = format!("pack-{pid}.mvpack");
+        let ix = format!("pack-{pid}.idx.json");
+        let pp = packs_dir.join(&pf);
+        let ip = packs_dir.join(&ix);
+        let (tmp, mut out) = create_temp_file_near(&pp)?;
+        let mut entries = Vec::new();
+        let mut offset = 0u64;
+        {
+            for (id, bytes, encoding, payload) in &pack_candidates {
+                out.write_all(payload)?;
+                entries.push(PackEntry {
+                    id: id.to_string(),
+                    offset,
+                    size: bytes.len() as u64,
+                    stored_size: payload.len() as u64,
+                    encoding: *encoding,
+                });
+                offset = offset.saturating_add(payload.len() as u64);
+            }
+            out.sync_all()?;
+        }
+        drop(out);
+        fs::rename(&tmp, &pp)?;
+        let idx = PackIndex {
+            version: PACK_VERSION,
+            pack_file: pf,
+            objects: entries,
+        };
+        Self::atomic_write(
+            &ip,
+            &serde_json::to_vec_pretty(&idx)
+                .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?,
+        )?;
+        if !self.verify_packs()?.is_ok() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                "optimized pack verification failed",
+            ));
+        }
         for e in fs::read_dir(&packs_dir)? {
             let e = e?;
             let p = e.path();
@@ -1245,10 +1783,33 @@ impl LocalCas {
                 report.old_pack_files_removed += 1;
             }
         }
-        let packed_ids=pack_candidates.iter().map(|(id,_,_,_)|id.to_string()).collect::<HashSet<_>>();
-        for (id,_) in &objects { let lp=self.object_path(id); if lp.is_file(){fs::remove_file(lp)?;report.loose_removed+=1;} let dp=self.delta_path(id); if dp.is_file()&&packed_ids.contains(id.as_str()){fs::remove_file(dp)?;report.deltas_removed+=1;} }
-        for (id,_) in &objects { if !self.verify(id)? { return Err(io::Error::new(io::ErrorKind::InvalidData,format!("object {id} failed verification after optimization"))); } }
-        report.pack_path=Some(pp); report.index_path=Some(ip); report.estimated_after_bytes=self.physical_storage_breakdown()?.total(); Ok(report)
+        let packed_ids = pack_candidates
+            .iter()
+            .map(|(id, _, _, _)| id.to_string())
+            .collect::<HashSet<_>>();
+        for (id, _) in &objects {
+            let lp = self.object_path(id);
+            if lp.is_file() {
+                fs::remove_file(lp)?;
+                report.loose_removed += 1;
+            }
+            let dp = self.delta_path(id);
+            if dp.is_file() && packed_ids.contains(id.as_str()) {
+                fs::remove_file(dp)?;
+                report.deltas_removed += 1;
+            }
+        }
+        for (id, _) in &objects {
+            if !self.verify(id)? {
+                return Err(io::Error::new(
+                    io::ErrorKind::InvalidData,
+                    format!("object {id} failed verification after optimization"),
+                ));
+            }
+        }
+        report.pack_path = Some(pp);
+        report.index_path = Some(ip);
+        report.estimated_after_bytes = self.physical_storage_breakdown()?.total();
+        Ok(report)
     }
-
 }
