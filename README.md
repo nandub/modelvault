@@ -227,6 +227,18 @@ modelvault analytics --detailed
 
 `fsck` validates manifest structure and object presence. `--deep` additionally validates logical object hashes.
 
+## Model comparison reports
+
+`diff` compares Safetensors metadata and chunk reuse. Use `--json` for
+automation or `--markdown` to write a review-ready report with artifact IDs,
+provenance/lineage summaries, tensor changes, and byte/reuse totals.
+
+```powershell
+modelvault diff .\models\base.safetensors.mvptr .\models\candidate.safetensors.mvptr --json
+modelvault diff .\models\base.safetensors.mvptr .\models\candidate.safetensors.mvptr `
+  --markdown .\reports\model-comparison.md
+```
+
 ## Diff and diagnostics
 
 ```powershell
