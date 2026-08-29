@@ -125,6 +125,15 @@ try {
     Invoke-Checked -Description 'Deep-verified S3 push' -Command {
         cargo run --locked --features s3 -- push $Pointer --remote-name $remoteName --deep-verify
     }
+    Invoke-Checked -Description 'Deep S3 remote fsck' -Command {
+        cargo run --locked --features s3 -- remote fsck $remoteName --deep
+    }
+    Invoke-Checked -Description 'S3 remote storage report' -Command {
+        cargo run --locked --features s3 -- remote storage $remoteName
+    }
+    Invoke-Checked -Description 'S3 remote GC dry-run' -Command {
+        cargo run --locked --features s3 -- remote gc $remoteName
+    }
 
     New-Item -ItemType Directory -Path $testRoot | Out-Null
     Invoke-Checked -Description 'Clean Git clone' -Command { git clone --no-local $repo $clone }

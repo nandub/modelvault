@@ -1,6 +1,8 @@
 use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand, ValueEnum};
+#[cfg(feature = "s3")]
+use modelvault::object_store::{ObjectStore, S3ObjectStore};
 #[cfg(feature = "signing")]
 use modelvault::attestation::{attest_manifest, default_attestation_path, generate_key_pair, save_attestation, verify_attestation};
 use modelvault::{
@@ -965,6 +967,8 @@ fn remote_cmd(command: RemoteCommand, store: &Path) -> anyhow::Result<()> {
                 .remotes
                 .get(&name)
                 .ok_or_else(|| anyhow::anyhow!("unknown remote '{name}'"))?;
+            #[cfg(feature = "s3")]
+            if remote.kind == "s3" { return s3_audit_cmd(&name, remote, deep, false, "fsck"); }
             anyhow::ensure!(
                 remote.kind == "filesystem",
                 "remote fsck currently requires a filesystem/UNC remote; S3/MinIO remote-wide listing is not implemented yet"
@@ -983,6 +987,8 @@ fn remote_cmd(command: RemoteCommand, store: &Path) -> anyhow::Result<()> {
         }
         RemoteCommand::Storage { name } => {
             let remote = config.remotes.get(&name).ok_or_else(|| anyhow::anyhow!("unknown remote '{name}'"))?;
+            #[cfg(feature = "s3")]
+            if remote.kind == "s3" { return s3_audit_cmd(&name, remote, false, false, "storage"); }
             anyhow::ensure!(remote.kind == "filesystem", "remote storage currently requires a filesystem/UNC remote; S3/MinIO remote-wide listing is not implemented yet");
             let remote_path = remote.filesystem_path()?;
             let report = storage_report(remote_path)?;
@@ -992,6 +998,8 @@ fn remote_cmd(command: RemoteCommand, store: &Path) -> anyhow::Result<()> {
         }
         RemoteCommand::Gc { name, prune } => {
             let remote = config.remotes.get(&name).ok_or_else(|| anyhow::anyhow!("unknown remote '{name}'"))?;
+            #[cfg(feature = "s3")]
+            if remote.kind == "s3" { return s3_audit_cmd(&name, remote, false, prune, "gc"); }
             anyhow::ensure!(remote.kind == "filesystem", "remote gc currently requires a filesystem/UNC remote; S3/MinIO remote-wide listing is not implemented yet");
             let remote_path = remote.filesystem_path()?;
             let report = gc(remote_path, prune)?;
@@ -1003,6 +1011,21 @@ fn remote_cmd(command: RemoteCommand, store: &Path) -> anyhow::Result<()> {
             }
         }
     }
+    Ok(())
+}
+
+#[cfg(feature = "s3")]
+fn s3_audit_cmd(name: &str, remote: &RemoteDefinition, deep: bool, prune: bool, mode: &str) -> anyhow::Result<()> {
+    let store = S3ObjectStore::open(remote)?;
+    let report = store.audit(deep, prune)?;
+    println!("ModelVault remote {mode}\nRemote:             {}\nStore:              {}\nMode:               {}\nManifests:          {}\nLogical bytes:      {}\nPhysical bytes:     {}\nReferenced objects: {}\nMissing objects:    {}\nCorrupt objects:    {}\nOrphan objects:     {}\nOrphan bytes:       {}\nRemoved objects:    {}\nRemoved bytes:      {}",
+        name, store.display_name(), if deep { "deep" } else if prune { "prune" } else { "structural/dry-run" },
+        report.manifests, report.logical_bytes, report.physical_bytes, report.referenced_objects,
+        report.missing_objects, report.corrupt_objects, report.orphan_objects, report.orphan_bytes,
+        report.removed_objects, report.removed_bytes);
+    if !report.manifest_errors.is_empty() { for error in &report.manifest_errors { println!("- {error}"); } }
+    if mode == "fsck" { anyhow::ensure!(report.manifest_errors.is_empty() && report.missing_objects == 0 && report.corrupt_objects == 0, "remote integrity check failed"); }
+    if mode == "gc" && !prune && report.orphan_objects > 0 { println!("No remote objects were deleted. Re-run with --prune to remove unreachable objects."); }
     Ok(())
 }
 

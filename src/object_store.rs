@@ -6,6 +6,8 @@ use std::{
 #[cfg(feature = "s3")]
 use std::fmt::Formatter;
 #[cfg(feature = "s3")]
+use std::collections::HashSet;
+#[cfg(feature = "s3")]
 use anyhow::{ensure, Context};
 #[cfg(feature = "s3")]
 use aws_config::{BehaviorVersion, Region};
@@ -102,6 +104,23 @@ pub struct S3ObjectStore {
     bucket: String,
     prefix: String,
     endpoint: Option<String>,
+}
+
+#[cfg(feature = "s3")]
+#[derive(Debug, Clone, Default)]
+pub struct S3AuditReport {
+    pub manifests: usize,
+    pub manifest_errors: Vec<String>,
+    pub referenced_objects: usize,
+    pub missing_objects: usize,
+    pub corrupt_objects: usize,
+    pub object_count: usize,
+    pub physical_bytes: u64,
+    pub logical_bytes: u64,
+    pub orphan_objects: usize,
+    pub orphan_bytes: u64,
+    pub removed_objects: usize,
+    pub removed_bytes: u64,
 }
 
 #[cfg(feature = "s3")]
@@ -203,6 +222,76 @@ impl S3ObjectStore {
             .block_on(request.send())
             .with_context(|| format!("failed to put s3://{}/{}", self.bucket, key))?;
         Ok(())
+    }
+
+    fn list_prefix(&self, prefix: &str) -> anyhow::Result<Vec<(String, u64)>> {
+        const MAX_LISTED: usize = 100_000;
+        let mut continuation = None;
+        let mut listed = Vec::new();
+        loop {
+            let mut request = self.client.list_objects_v2().bucket(&self.bucket).prefix(prefix);
+            if let Some(token) = continuation.as_deref() { request = request.continuation_token(token); }
+            let page = self.runtime.block_on(request.send()).with_context(|| format!("failed to list s3://{}/{}", self.bucket, prefix))?;
+            for item in page.contents() {
+                let key = item.key().context("S3 listing returned an object without a key")?;
+                let size = u64::try_from(item.size().unwrap_or(0)).context("S3 object size cannot be negative")?;
+                listed.push((key.to_string(), size));
+                ensure!(listed.len() <= MAX_LISTED, "S3 remote listing exceeds safety limit of {MAX_LISTED} objects");
+            }
+            if !page.is_truncated().unwrap_or(false) { break; }
+            continuation = page.next_continuation_token().map(ToOwned::to_owned);
+            ensure!(continuation.is_some(), "S3 listing is truncated without a continuation token");
+        }
+        Ok(listed)
+    }
+
+    fn read_key(&self, key: &str) -> anyhow::Result<Vec<u8>> {
+        let output = self.runtime.block_on(self.client.get_object().bucket(&self.bucket).key(key).send())
+            .with_context(|| format!("failed to get s3://{}/{}", self.bucket, key))?;
+        Ok(self.runtime.block_on(output.body.collect())?.to_vec())
+    }
+
+    pub fn audit(&self, deep: bool, prune: bool) -> anyhow::Result<S3AuditReport> {
+        let manifest_prefix = self.key("manifests/");
+        let object_prefix = self.key("objects/");
+        let mut report = S3AuditReport::default();
+        let mut manifests = Vec::new();
+        for (key, _) in self.list_prefix(&manifest_prefix)? {
+            let Some(name) = key.strip_prefix(&manifest_prefix) else { continue };
+            if name.len() != 69 || !name.ends_with(".json") || !name[..64].bytes().all(|byte| byte.is_ascii_hexdigit()) { continue; }
+            report.manifests += 1;
+            match serde_json::from_slice::<ArtifactManifest>(&self.read_key(&key)?) {
+                Ok(manifest) if manifest.artifact_id.eq_ignore_ascii_case(&name[..64]) => match crate::manifest::validate_manifest_structure(&manifest) {
+                    Ok(()) => { report.logical_bytes = report.logical_bytes.saturating_add(manifest.logical_size); manifests.push(manifest); }
+                    Err(error) => report.manifest_errors.push(format!("{key}: {error}")),
+                },
+                Ok(_) => report.manifest_errors.push(format!("{key}: manifest artifact ID does not match canonical key")),
+                Err(error) => report.manifest_errors.push(format!("{key}: invalid manifest: {error}")),
+            }
+        }
+        let refs: HashSet<String> = manifests.iter().flat_map(|manifest| manifest.chunks.iter().map(|chunk| chunk.object.clone())).collect();
+        report.referenced_objects = refs.len();
+        for value in &refs {
+            let id = ObjectId::parse(value)?;
+            if !self.contains(&id)? { report.missing_objects += 1; }
+            else if !(if deep { self.verify_deep(&id)? } else { self.verify(&id)? }) { report.corrupt_objects += 1; }
+        }
+        let mut objects = Vec::new();
+        for (key, size) in self.list_prefix(&object_prefix)? {
+            let Some(suffix) = key.strip_prefix(&object_prefix) else { continue };
+            let compact = suffix.replace('/', "");
+            let Ok(id) = ObjectId::parse(&compact) else { continue };
+            if self.object_key(&id) == key { objects.push((id, size)); }
+        }
+        report.object_count = objects.len();
+        report.physical_bytes = objects.iter().map(|(_, size)| *size).sum();
+        for (id, size) in objects {
+            if refs.contains(id.as_str()) { continue; }
+            report.orphan_objects += 1;
+            report.orphan_bytes = report.orphan_bytes.saturating_add(size);
+            if prune { self.remove(&id)?; report.removed_objects += 1; report.removed_bytes = report.removed_bytes.saturating_add(size); }
+        }
+        Ok(report)
     }
 }
 
