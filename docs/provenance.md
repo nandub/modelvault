@@ -38,6 +38,9 @@ those identities. Private/public key files contain base64-encoded 32-byte raw
 Ed25519 key material and must remain outside the repository.
 
 ```powershell
+cargo run --features signing -- attest-keygen `
+  --private-key C:\Keys\modelvault-release.private `
+  --public-key C:\Keys\modelvault-release.public
 cargo run --features signing -- attest .\models\model.safetensors.mvptr `
   --private-key C:\Keys\modelvault-release.private `
   --key-id release-2026-08

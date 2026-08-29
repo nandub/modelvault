@@ -1,8 +1,9 @@
-use std::{fs, path::{Path, PathBuf}};
+use std::{fs, io::Write, path::{Path, PathBuf}};
 
 use anyhow::{ensure, Context};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
+use rand_core::OsRng;
 use serde::{Deserialize, Serialize};
 
 use crate::manifest::ArtifactManifest;
@@ -36,6 +37,27 @@ pub fn manifest_digest(manifest: &ArtifactManifest) -> anyhow::Result<String> {
 
 pub fn default_attestation_path(store: &Path, artifact_id: &str) -> PathBuf {
     store.join("attestations").join(format!("{artifact_id}.ed25519.json"))
+}
+
+fn write_new_key(path: &Path, bytes: &[u8], kind: &str) -> anyhow::Result<()> {
+    if let Some(parent) = path.parent() { fs::create_dir_all(parent)?; }
+    let mut file = fs::OpenOptions::new().write(true).create_new(true).open(path)
+        .with_context(|| format!("failed to create {kind} key {}; existing keys are never overwritten", path.display()))?;
+    file.write_all(STANDARD.encode(bytes).as_bytes())?;
+    file.write_all(b"\n")?;
+    file.sync_all()?;
+    Ok(())
+}
+
+pub fn generate_key_pair(private_key_path: &Path, public_key_path: &Path) -> anyhow::Result<()> {
+    ensure!(private_key_path != public_key_path, "private and public key paths must differ");
+    let signing = SigningKey::generate(&mut OsRng);
+    let verifying = VerifyingKey::from(&signing);
+    write_new_key(private_key_path, &signing.to_bytes(), "private")?;
+    if let Err(error) = write_new_key(public_key_path, &verifying.to_bytes(), "public") {
+        return Err(error).context("private key was created but public key creation failed; preserve the private key and choose a new public-key path");
+    }
+    Ok(())
 }
 
 pub fn attest_manifest(manifest: &ArtifactManifest, private_key_path: &Path, key_id: &str) -> anyhow::Result<ManifestAttestation> {

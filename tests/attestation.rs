@@ -6,7 +6,7 @@ use base64::{engine::general_purpose::STANDARD, Engine as _};
 use ed25519_dalek::{SigningKey, VerifyingKey};
 use modelvault::{
     artifact::add_raw_artifact,
-    attestation::{attest_manifest, save_attestation, verify_attestation},
+    attestation::{attest_manifest, generate_key_pair, save_attestation, verify_attestation},
     cas::LocalCas,
 };
 use tempfile::tempdir;
@@ -34,5 +34,17 @@ fn ed25519_attestation_binds_the_complete_manifest_payload() -> anyhow::Result<(
     let mut changed = added.manifest.clone();
     changed.source_name = "changed-name.bin".to_string();
     assert!(verify_attestation(&changed, &path, &public).is_err());
+    Ok(())
+}
+
+#[test]
+fn key_generation_creates_base64_keys_without_overwriting_existing_files() -> anyhow::Result<()> {
+    let temp = tempdir()?;
+    let private = temp.path().join("private.key");
+    let public = temp.path().join("public.key");
+    generate_key_pair(&private, &public)?;
+    assert_eq!(STANDARD.decode(fs::read_to_string(&private)?.trim())?.len(), 32);
+    assert_eq!(STANDARD.decode(fs::read_to_string(&public)?.trim())?.len(), 32);
+    assert!(generate_key_pair(&private, &public).is_err());
     Ok(())
 }

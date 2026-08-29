@@ -1659,6 +1659,7 @@ dependencies = [
  "ed25519-dalek",
  "fastcdc",
  "memmap2",
+ "rand_core",
  "safetensors",
  "serde",
  "serde_json",

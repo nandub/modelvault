@@ -2,7 +2,7 @@ use std::path::{Path, PathBuf};
 
 use clap::{Parser, Subcommand, ValueEnum};
 #[cfg(feature = "signing")]
-use modelvault::attestation::{attest_manifest, default_attestation_path, save_attestation, verify_attestation};
+use modelvault::attestation::{attest_manifest, default_attestation_path, generate_key_pair, save_attestation, verify_attestation};
 use modelvault::{
     artifact::{add_raw_artifact, add_safetensors_artifact, inspect_safetensors, materialize, materialize_selected_safetensors, resolve_selected_tensor_names, verify_artifact},
     benchmark::benchmark_pair,
@@ -101,6 +101,9 @@ enum Command {
     /// Create an optional Ed25519 attestation for a manifest or pointer.
     #[cfg(feature = "signing")]
     Attest { artifact: PathBuf, #[arg(long)] private_key: PathBuf, #[arg(long)] key_id: String, #[arg(long)] output: Option<PathBuf> },
+    /// Generate a new Ed25519 key pair for optional manifest attestations.
+    #[cfg(feature = "signing")]
+    AttestKeygen { #[arg(long)] private_key: PathBuf, #[arg(long)] public_key: PathBuf },
     /// Verify an Ed25519 manifest attestation using a public key.
     #[cfg(feature = "signing")]
     VerifyAttestation { artifact: PathBuf, #[arg(long)] public_key: PathBuf, #[arg(long)] attestation: Option<PathBuf> },
@@ -302,6 +305,8 @@ fn run_cli() -> anyhow::Result<()> {
         #[cfg(feature = "signing")]
         Command::Attest { artifact, private_key, key_id, output } => attest_cmd(&artifact, &private_key, &key_id, output.as_deref())?,
         #[cfg(feature = "signing")]
+        Command::AttestKeygen { private_key, public_key } => attest_keygen_cmd(&private_key, &public_key)?,
+        #[cfg(feature = "signing")]
         Command::VerifyAttestation { artifact, public_key, attestation } => verify_attestation_cmd(&artifact, &public_key, attestation.as_deref())?,
         Command::Compare { left, right } => compare_manifests(&ArtifactManifest::load(left)?,&ArtifactManifest::load(right)?),
         Command::Track { path, format, chunk_size, pointer, stage } => track_cmd(&path, format, chunk_size, pointer.as_deref(), stage)?,
@@ -362,6 +367,13 @@ fn attest_cmd(artifact: &Path, private_key: &Path, key_id: &str, output: Option<
     let attestation = attest_manifest(&manifest, private_key, key_id)?;
     save_attestation(&attestation, &path)?;
     println!("ModelVault attestation\nArtifact ID:      {}\nManifest BLAKE3:  {}\nAlgorithm:        {}\nKey ID:           {}\nAttestation:      {}", attestation.artifact_id, attestation.manifest_blake3, attestation.algorithm, attestation.key_id, path.display());
+    Ok(())
+}
+
+#[cfg(feature = "signing")]
+fn attest_keygen_cmd(private_key: &Path, public_key: &Path) -> anyhow::Result<()> {
+    generate_key_pair(private_key, public_key)?;
+    println!("Generated Ed25519 attestation key pair\nPrivate key: {}\nPublic key:  {}\nKeep the private key outside the repository and protect it with normal OS controls.", private_key.display(), public_key.display());
     Ok(())
 }
 
