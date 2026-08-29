@@ -121,20 +121,32 @@ jobs:
         shell: pwsh
         run: |
           $assetName = "modelvault-$env:RELEASE_TAG-x86_64-unknown-linux-gnu.zip"
-          $downloadDirectory = Join-Path $PWD 'release-smoke-download'
           $extractDirectory = Join-Path $PWD 'release-smoke-extract'
-          New-Item -ItemType Directory -Path $downloadDirectory | Out-Null
-          gh release download $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY `
-            --pattern $assetName --pattern SHA256SUMS --dir $downloadDirectory
-          if ($LASTEXITCODE -ne 0) { throw 'Unable to download published release assets.' }
+          $verifiedArchive = $null
+          $expectedHash = $null
+          $actualHash = $null
+          foreach ($attempt in 1..3) {
+            $downloadDirectory = Join-Path $PWD "release-smoke-download-$attempt"
+            New-Item -ItemType Directory -Path $downloadDirectory | Out-Null
+            gh release download $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY `
+              --pattern $assetName --pattern SHA256SUMS --dir $downloadDirectory
+            if ($LASTEXITCODE -ne 0) { throw 'Unable to download published release assets.' }
 
-          $checksumLine = Get-Content (Join-Path $downloadDirectory 'SHA256SUMS') |
-            Where-Object { $_ -match "  $([regex]::Escape($assetName))$" }
-          if (@($checksumLine).Count -ne 1) { throw "Expected one checksum entry for $assetName." }
-          $expectedHash = ($checksumLine -split '\s+', 2)[0].ToLowerInvariant()
-          $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $downloadDirectory $assetName)).Hash.ToLowerInvariant()
-          if ($actualHash -ne $expectedHash) { throw "Checksum mismatch for $assetName." }
+            $checksumLine = Get-Content (Join-Path $downloadDirectory 'SHA256SUMS') |
+              Where-Object { $_ -match "  $([regex]::Escape($assetName))$" }
+            if (@($checksumLine).Count -ne 1) { throw "Expected one checksum entry for $assetName." }
+            $expectedHash = ($checksumLine -split '\s+', 2)[0].ToLowerInvariant()
+            $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $downloadDirectory $assetName)).Hash.ToLowerInvariant()
+            if ($actualHash -eq $expectedHash) {
+              $verifiedArchive = Join-Path $downloadDirectory $assetName
+              break
+            }
+            if ($attempt -lt 3) { Start-Sleep -Seconds (5 * $attempt) }
+          }
+          if ($null -eq $verifiedArchive) {
+            throw "Checksum mismatch for $assetName after three downloads. Expected $expectedHash; got $actualHash."
+          }
 
-          Expand-Archive -LiteralPath (Join-Path $downloadDirectory $assetName) -DestinationPath $extractDirectory
+          Expand-Archive -LiteralPath $verifiedArchive -DestinationPath $extractDirectory
           & (Join-Path $extractDirectory 'modelvault') -V
           if ($LASTEXITCODE -ne 0) { throw 'Published ModelVault binary failed its version check.' }
