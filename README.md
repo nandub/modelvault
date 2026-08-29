@@ -53,6 +53,12 @@ once, keeping AWS SDK compile cost out of the cross-platform matrix. The
 Docker-based MinIO acceptance harness remains an explicit local/release gate;
 run it with `Validate-ModelVault.ps1 -WithS3 -WithMinio`.
 
+Pushing a version tag such as `v1.7.0` triggers a separate release workflow. It
+builds the default-feature `--release` binary for Windows x86_64, Linux x86_64,
+and Apple Silicon macOS, packages each as a ZIP file, writes `SHA256SUMS`, and
+attaches them to the matching GitHub Release. S3 remains an optional source
+build feature rather than a dependency of the distributed default binaries.
+
 Optional security tooling:
 
 ```powershell
