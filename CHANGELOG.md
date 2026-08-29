@@ -13,6 +13,7 @@
 - Added GitHub Actions CI for locked validation on Windows, Linux, and macOS, plus an optional S3 build gate.
 - Added tag-triggered GitHub Release artifacts for Windows x86_64, Linux x86_64/ARM64, and macOS Intel/Apple Silicon, with binary sanity checks and SHA-256 checksums.
 - Added scheduled RustSec dependency auditing and Semgrep static analysis with metrics disabled.
+- Updated the optional AWS S3 SDK dependencies and documented temporary RustSec exceptions for remaining upstream HTTP/TLS advisories.
 - No artifact-ID, CAS-ID, manifest-v1, pointer-v1, pack, delta, or repository-format identity changes.
 
 ## 1.6.1 - Rust 1.96 compatibility fix

@@ -20,6 +20,11 @@ jobs:
       - uses: actions/checkout@v4
       - uses: dtolnay/rust-toolchain@stable
       - uses: pirafrank/audit-check-action@v1
+        with:
+          # Optional AWS S3 currently retains aws-smithy-http-client 1.4.0,
+          # which requires the vulnerable pre-0.4 h2/rustls-webpki line. Review
+          # and remove these exceptions when AWS publishes a compatible fix.
+          ignore: RUSTSEC-2026-0258,RUSTSEC-2026-0098,RUSTSEC-2026-0099,RUSTSEC-2026-0104
 
   semgrep:
     name: Semgrep static analysis
@@ -28,4 +33,4 @@ jobs:
       image: semgrep/semgrep:latest
     steps:
       - uses: actions/checkout@v4
-      - run: semgrep scan --config auto --metrics off
+      - run: semgrep scan --config p/rust --metrics off

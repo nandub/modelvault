@@ -89,6 +89,12 @@ cargo audit
 cargo deny check
 ```
 
+The scheduled security workflow records any temporary RustSec advisory
+exceptions explicitly. Exceptions must identify the constrained dependency path
+and be removed promptly when a compatible upstream fix is available. Current
+exceptions apply only to the feature-gated AWS S3 stack; the workflow continues
+to audit all other dependencies.
+
 The normal build excludes the AWS SDK. S3 support is opt-in with `--features s3`.
 
 ## Non-goals
