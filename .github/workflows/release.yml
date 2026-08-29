@@ -90,10 +90,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: |
-          gh release view $env:RELEASE_TAG *> $null
+          gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY *> $null
           if ($LASTEXITCODE -ne 0) {
-            gh release create $env:RELEASE_TAG --generate-notes
+            gh release create $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --generate-notes
             if ($LASTEXITCODE -ne 0) { throw 'Unable to create GitHub Release.' }
           }
-          gh release upload $env:RELEASE_TAG release-assets/* --clobber
+          gh release upload $env:RELEASE_TAG release-assets/* --repo $env:GITHUB_REPOSITORY --clobber
           if ($LASTEXITCODE -ne 0) { throw 'Unable to upload release assets.' }
