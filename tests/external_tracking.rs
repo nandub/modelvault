@@ -1,7 +1,7 @@
 use std::fs;
 
 use modelvault::git_integration::{
-    ensure_modelvault_gitignore, pointer_path_for_source, source_is_inside_repo,
+    ensure_modelvault_gitignore, find_modelvault_pointers, pointer_path_for_source, source_is_inside_repo,
 };
 use tempfile::tempdir;
 
@@ -80,5 +80,20 @@ fn broad_legacy_modelvault_ignore_is_migrated() -> anyhow::Result<()> {
     assert!(ignore.contains(".modelvault/packs/"));
     assert!(ignore.contains(".modelvault/deltas/"));
     assert!(ignore.contains("*.tmp"));
+    Ok(())
+}
+
+#[test]
+fn pointer_discovery_ignores_git_and_modelvault_storage() -> anyhow::Result<()> {
+    let repo = tempdir()?;
+    fs::create_dir_all(repo.path().join("models"))?;
+    fs::create_dir_all(repo.path().join(".git"))?;
+    fs::create_dir_all(repo.path().join(".modelvault"))?;
+    fs::write(repo.path().join("models/model.safetensors.mvptr"), "{}")?;
+    fs::write(repo.path().join(".git/ignored.mvptr"), "{}")?;
+    fs::write(repo.path().join(".modelvault/ignored.mvptr"), "{}")?;
+
+    let pointers = find_modelvault_pointers(repo.path(), 10)?;
+    assert_eq!(pointers, vec![std::path::PathBuf::from("models").join("model.safetensors.mvptr")]);
     Ok(())
 }

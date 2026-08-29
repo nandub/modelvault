@@ -11,7 +11,7 @@ use modelvault::{
     delta::{analyze_delta_potential, optimize_delta_storage},
     diff::{diff_report, ModelDiffReport},
     diagnostics::{compare_snapshots, pair_chunk_stats, simulate_policy},
-    git_integration::{ensure_modelvault_gitignore, git_add, git_add_force, git_root, pointer_path_for_source, source_is_inside_repo},
+    git_integration::{ensure_modelvault_gitignore, find_modelvault_pointers, git_add, git_add_force, git_root, install_modelvault_post_checkout_hook, pointer_path_for_source, source_is_inside_repo},
     import::{default_hf_cache_dir, default_hf_target, download_hf_file, huggingface_provenance, pointer_path_for_target, repository_target_path, resolve_hf_cached_file},
     lineage::{add_lineage_edge, build_lineage_graph, ensure_no_lineage_cycle, LineageGraphNode},
     manifest::{ArtifactManifest, ArtifactProvenance},
@@ -76,6 +76,12 @@ enum RemoteCommand {
     Storage { name: String },
     /// Find unreachable objects on a filesystem/UNC remote. Deletion requires --prune.
     Gc { name: String, #[arg(long)] prune: bool },
+}
+
+#[derive(Debug, Subcommand)]
+enum GitHookCommand {
+    /// Install a post-checkout hook that prints explicit ModelVault recovery advice.
+    Install { #[arg(long)] force: bool },
 }
 
 #[derive(Debug, Subcommand)]
@@ -192,6 +198,10 @@ enum Command {
     },
     /// Show tensor-aware differences between two manifests or .mvptr files.
     Diff { left: PathBuf, right: PathBuf, #[arg(long)] all: bool, #[arg(long)] json: bool, #[arg(long)] markdown: Option<PathBuf> },
+    /// Manage opt-in Git hooks. Hooks never fetch or materialize artifacts automatically.
+    GitHook { #[command(subcommand)] command: GitHookCommand },
+    /// Print explicit pull/materialization advice for pointers in the current checkout.
+    CheckoutAdvice,
     /// Benchmark fixed, tensor-fixed, FastCDC, and tensor-FastCDC reuse.
     Benchmark { left: PathBuf, right: PathBuf, #[arg(long, default_value_t = 4 * 1024 * 1024)] avg_chunk_size: usize, #[arg(long)] raw: bool, #[arg(long)] json: bool },
     /// Push all objects referenced by a manifest/pointer to a remote.
@@ -312,6 +322,8 @@ fn run_cli() -> anyhow::Result<()> {
         Command::Checkout { pointer, output } => checkout_cmd(&pointer,output.as_deref())?,
         Command::ExtractTensors { pointer, tensors, prefixes, output, to, chunk_size, stage } => extract_tensors_cmd(&pointer, &tensors, &prefixes, &output, to.as_deref(), chunk_size, stage)?,
         Command::Diff { left, right, all, json, markdown } => diff_cmd(&left,&right,all,json,markdown.as_deref())?,
+        Command::GitHook { command } => git_hook_cmd(command)?,
+        Command::CheckoutAdvice => checkout_advice_cmd()?,
         Command::Benchmark { left, right, avg_chunk_size, raw, json } => benchmark_cmd(&left,&right,avg_chunk_size,!raw,json)?,
         Command::Push { artifact, remote, remote_name, jobs, deep_verify, store } => sync_cmd(&artifact, &store, remote.as_deref(), remote_name.as_deref(), jobs, deep_verify, true)?,
         Command::Pull { artifact, remote, remote_name, jobs, deep_verify, store } => sync_cmd(&artifact, &store, remote.as_deref(), remote_name.as_deref(), jobs, deep_verify, false)?,
@@ -747,6 +759,35 @@ fn diff_cmd(left:&Path,right:&Path,all:bool,json:bool,markdown:Option<&Path>)->a
         std::fs::write(path,markdown_diff_report(&report,all))?;
         println!("Markdown report: {}",path.display());
     }
+    Ok(())
+}
+
+fn git_hook_cmd(command: GitHookCommand) -> anyhow::Result<()> {
+    match command {
+        GitHookCommand::Install { force } => {
+            let root = git_root()?;
+            let hook = install_modelvault_post_checkout_hook(&root, force)?;
+            println!("Installed ModelVault post-checkout advice hook: {}\nThe hook only reports pointers and suggested commands; it never pulls or materializes artifacts.", hook.display());
+        }
+    }
+    Ok(())
+}
+
+fn checkout_advice_cmd() -> anyhow::Result<()> {
+    let root = git_root()?;
+    let pointers = find_modelvault_pointers(&root, 10_000)?;
+    if pointers.is_empty() {
+        return Ok(());
+    }
+    println!("ModelVault: found {} pointer file(s) in this checkout.", pointers.len());
+    let config = ModelVaultConfig::load(&root.join(".modelvault"))?;
+    if let Some(remote) = config.default_remote {
+        println!("To retrieve artifact objects, run for each required pointer:\n  modelvault pull <pointer.mvptr> --remote-name {remote}\nThen materialize explicitly:\n  modelvault checkout <pointer.mvptr>");
+    } else {
+        println!("Configure or select a remote, then run:\n  modelvault pull <pointer.mvptr> --remote-name <remote>\n  modelvault checkout <pointer.mvptr>");
+    }
+    for pointer in pointers.iter().take(20) { println!("- {}", pointer.display()); }
+    if pointers.len() > 20 { println!("- ... and {} more", pointers.len() - 20); }
     Ok(())
 }
 

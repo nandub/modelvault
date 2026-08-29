@@ -5,7 +5,7 @@ use std::{
     process::Command,
 };
 
-use anyhow::{bail, Context};
+use anyhow::{bail, ensure, Context};
 
 pub fn git_root() -> anyhow::Result<PathBuf> {
     let output = Command::new("git")
@@ -132,4 +132,45 @@ pub fn git_add_force(paths: &[PathBuf]) -> anyhow::Result<()> {
         bail!("git add -f failed with status {status}");
     }
     Ok(())
+}
+
+pub fn install_modelvault_post_checkout_hook(root: &Path, force: bool) -> anyhow::Result<PathBuf> {
+    let output = Command::new("git")
+        .args(["rev-parse", "--git-path", "hooks"])
+        .current_dir(root)
+        .output()
+        .context("failed to locate Git hooks directory")?;
+    ensure!(output.status.success(), "unable to locate Git hooks directory");
+    let hooks = PathBuf::from(String::from_utf8(output.stdout)?.trim());
+    let hooks = if hooks.is_absolute() { hooks } else { root.join(hooks) };
+    let hook = hooks.join("post-checkout");
+    if hook.exists() && !force {
+        bail!("Git hook already exists at {}; use --force only if it is safe to replace", hook.display());
+    }
+    fs::create_dir_all(&hooks)?;
+    fs::write(&hook, "#!/bin/sh\n# Installed by ModelVault; this hook performs no network or filesystem materialization.\nif command -v modelvault >/dev/null 2>&1; then\n  modelvault checkout-advice\nfi\n")?;
+    Ok(hook)
+}
+
+pub fn find_modelvault_pointers(root: &Path, limit: usize) -> anyhow::Result<Vec<PathBuf>> {
+    fn visit(root: &Path, current: &Path, found: &mut Vec<PathBuf>, limit: usize) -> anyhow::Result<()> {
+        for entry in fs::read_dir(current)? {
+            let entry = entry?;
+            let path = entry.path();
+            let ty = entry.file_type()?;
+            if ty.is_dir() {
+                let name = entry.file_name();
+                if name == ".git" || name == ".modelvault" { continue; }
+                visit(root, &path, found, limit)?;
+            } else if ty.is_file() && path.extension().and_then(|value| value.to_str()).is_some_and(|value| value.eq_ignore_ascii_case("mvptr")) {
+                found.push(path.strip_prefix(root).unwrap_or(&path).to_path_buf());
+                ensure!(found.len() <= limit, "too many .mvptr files; limit is {limit}");
+            }
+        }
+        Ok(())
+    }
+    let mut found = Vec::new();
+    visit(root, root, &mut found, limit)?;
+    found.sort();
+    Ok(found)
 }

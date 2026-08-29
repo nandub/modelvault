@@ -308,6 +308,19 @@ modelvault pull .\models\model.safetensors.mvptr --remote-name origin --deep-ver
 
 Fast S3 verification may trust ModelVault BLAKE3 metadata from `HEAD`; `--deep-verify` downloads and hashes object bodies. Use HTTPS for non-local custom S3-compatible endpoints. Local HTTP is appropriate for development MinIO; non-local plaintext HTTP produces a warning.
 
+## Optional Git checkout advice
+
+Install an opt-in post-checkout hook to detect ModelVault pointers after a
+clone, branch checkout, or reset and print explicit recovery commands:
+
+```powershell
+modelvault git-hook install
+```
+
+The hook only runs `modelvault checkout-advice`. It never contacts a remote,
+pulls objects, or materializes files automatically. Existing Git hooks are
+preserved unless `--force` is explicitly supplied.
+
 See [docs/remotes.md](docs/remotes.md).
 
 ## Documentation
