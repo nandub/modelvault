@@ -72,6 +72,14 @@ manifest digest. Attestations authenticate possession of a private key; they do
 not make Git-controlled manifests trusted before signature verification. Private
 keys are supplied from local files and are never stored in repository metadata.
 
+### Release artifact signing
+
+GitHub Release archives and their `SHA256SUMS` files are keylessly signed by
+the release workflow using GitHub Actions OIDC and Sigstore. Verify a release
+bundle against the ModelVault workflow identity as described in
+`docs/release-signing.md`. Release signatures authenticate the published CLI
+archive; they do not change ModelVault artifact or CAS identities.
+
 ## Dependency and build security
 
 ModelVault is an executable application and release builds should include `Cargo.lock` and use locked dependency resolution:

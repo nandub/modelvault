@@ -12,7 +12,7 @@ on:
         type: string
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: release-${{ inputs.tag || github.ref }}
@@ -70,6 +70,9 @@ jobs:
     name: Publish GitHub Release
     needs: build
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      id-token: write
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -85,6 +88,14 @@ jobs:
               $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
               "$hash  $($_.Name)"
             } | Set-Content -NoNewline release-assets/SHA256SUMS
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v4.1.0
+      - name: Keylessly sign release assets
+        shell: bash
+        run: |
+          for asset in release-assets/*.zip release-assets/SHA256SUMS; do
+            cosign sign-blob --yes --bundle "${asset}.sigstore.json" "$asset"
+          done
       - name: Create or update GitHub Release
         env:
           GH_TOKEN: ${{ github.token }}

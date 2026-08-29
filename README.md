@@ -60,6 +60,9 @@ verifies the binary can report its version, writes `SHA256SUMS`, and attaches
 the assets to the matching GitHub Release. S3 remains an optional source build
 feature rather than a dependency of the distributed default binaries.
 
+Each release asset and `SHA256SUMS` receive a keyless Sigstore bundle. See
+[release artifact signing](docs/release-signing.md) for verification commands.
+
 The `Security` workflow runs on pushes and pull requests, with a weekly Monday
 schedule. It checks `Cargo.lock` against RustSec advisories and performs a
 Semgrep static scan with metrics disabled.
@@ -357,6 +360,7 @@ See [docs/remotes.md](docs/remotes.md).
 - [Measurement and analytics](docs/measurement.md)
 - [Provenance](docs/provenance.md)
 - [Lineage](docs/lineage.md)
+- [Release artifact signing](docs/release-signing.md)
 - [Security policy and trust model](SECURITY.md)
 - [1.5.0 security review](docs/security-review-1.5.0.md)
 - [Release history](CHANGELOG.md)

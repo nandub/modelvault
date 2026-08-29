@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Added keyless Sigstore bundles for GitHub Release archives and `SHA256SUMS`.
+
 ## 1.7.0 - Remote lifecycle, derived artifacts, and CI
 
 - Added `extract-tensors` for verified derived Safetensors output, with exact and prefix selectors, optional repository registration, and `extract-tensors` lineage.
