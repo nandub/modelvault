@@ -54,10 +54,15 @@ Docker-based MinIO acceptance harness remains an explicit local/release gate;
 run it with `Validate-ModelVault.ps1 -WithS3 -WithMinio`.
 
 Pushing a version tag such as `v1.7.0` triggers a separate release workflow. It
-builds the default-feature `--release` binary for Windows x86_64, Linux x86_64,
-and Apple Silicon macOS, packages each as a ZIP file, writes `SHA256SUMS`, and
-attaches them to the matching GitHub Release. S3 remains an optional source
-build feature rather than a dependency of the distributed default binaries.
+builds the default-feature `--release` binary for Windows x86_64, Linux x86_64
+and ARM64, and macOS Intel and Apple Silicon. It packages each as a ZIP file,
+verifies the binary can report its version, writes `SHA256SUMS`, and attaches
+the assets to the matching GitHub Release. S3 remains an optional source build
+feature rather than a dependency of the distributed default binaries.
+
+The `Security` workflow runs on pushes and pull requests, with a weekly Monday
+schedule. It checks `Cargo.lock` against RustSec advisories and performs a
+Semgrep static scan with metrics disabled.
 
 Optional security tooling:
 

@@ -32,9 +32,15 @@ jobs:
           - os: ubuntu-latest
             target: x86_64-unknown-linux-gnu
             binary: target/x86_64-unknown-linux-gnu/release/modelvault
+          - os: ubuntu-24.04-arm
+            target: aarch64-unknown-linux-gnu
+            binary: target/aarch64-unknown-linux-gnu/release/modelvault
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             binary: target/x86_64-pc-windows-msvc/release/modelvault.exe
+          - os: macos-15-intel
+            target: x86_64-apple-darwin
+            binary: target/x86_64-apple-darwin/release/modelvault
           - os: macos-14
             target: aarch64-apple-darwin
             binary: target/aarch64-apple-darwin/release/modelvault
@@ -45,6 +51,9 @@ jobs:
       - uses: dtolnay/rust-toolchain@1.94.1
       - uses: Swatinem/rust-cache@v2
       - run: cargo build --locked --release --target ${{ matrix.target }}
+      - name: Verify release binary
+        shell: pwsh
+        run: "& '${{ matrix.binary }}' -V"
       - name: Package binary
         shell: pwsh
         run: |
