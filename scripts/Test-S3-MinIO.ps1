@@ -64,6 +64,8 @@ $containerStarted = $false
 $sourceRemoteAdded = $false
 $cloneRemoteAdded = $false
 $endpoint = $null
+$orphanObjectId = 'aa' + ('b' * 62)
+$orphanKey = "$prefix/objects/$($orphanObjectId.Substring(0, 2))/$($orphanObjectId.Substring(2))"
 
 $originalEnvironment = @{}
 foreach ($name in 'AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY', 'AWS_REGION', 'AWS_EC2_METADATA_DISABLED') {
@@ -131,8 +133,27 @@ try {
     Invoke-Checked -Description 'S3 remote storage report' -Command {
         cargo run --locked --features s3 -- remote storage $remoteName
     }
-    Invoke-Checked -Description 'S3 remote GC dry-run' -Command {
-        cargo run --locked --features s3 -- remote gc $remoteName
+    Invoke-Checked -Description 'MinIO orphan object creation' -Command {
+        docker run --rm --entrypoint /bin/sh --env "MC_HOST_local=$mcAlias" $MinioClientImage `
+            -c "printf orphan | mc pipe local/$bucket/$orphanKey"
+    }
+    $gcDryRun = & cargo run --locked --features s3 -- remote gc $remoteName 2>&1
+    if ($LASTEXITCODE -ne 0) {
+        throw "S3 remote GC dry-run failed with exit code $LASTEXITCODE."
+    }
+    $gcDryRunText = $gcDryRun -join "`n"
+    if ($gcDryRunText -notmatch 'Orphan objects:\s+1' -or $gcDryRunText -notmatch 'Removed objects:\s+0') {
+        throw "S3 remote GC dry-run did not report the expected retained orphan object.`n$gcDryRunText"
+    }
+    Invoke-Checked -Description 'S3 remote GC prune' -Command {
+        cargo run --locked --features s3 -- remote gc $remoteName --prune
+    }
+    & docker run --rm --env "MC_HOST_local=$mcAlias" $MinioClientImage stat "local/$bucket/$orphanKey" *> $null
+    if ($LASTEXITCODE -eq 0) {
+        throw "S3 remote GC prune did not remove expected orphan object $orphanKey."
+    }
+    Invoke-Checked -Description 'Post-prune deep S3 remote fsck' -Command {
+        cargo run --locked --features s3 -- remote fsck $remoteName --deep
     }
 
     New-Item -ItemType Directory -Path $testRoot | Out-Null
