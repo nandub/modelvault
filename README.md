@@ -2,7 +2,7 @@
 
 ModelVault is an experimental tensor-aware, content-addressed storage layer for large AI artifacts. Git tracks small pointer/manifests while ModelVault stores reusable binary chunks in a local or remote CAS.
 
-Current release line: **1.6.x lineage**. The implementation includes Safetensors-aware chunking, exact materialization, Git pointers, imports, Hugging Face provenance, derivation lineage, model-aware diffing, FastCDC experiments, repository integrity/GC, pack v2, Zstandard physical encoding, bounded persistent deltas, optimization/analytics, filesystem remotes, and optional S3/MinIO support.
+Current release line: **1.6.x**. The implementation includes Safetensors-aware chunking and selective derived extraction, exact materialization, Git pointers, imports, Hugging Face provenance and lineage, JSON/Markdown model comparison reports, optional Ed25519 attestations, repository integrity/GC, pack/delta optimization, filesystem remotes, optional S3/MinIO audit/lifecycle support, and opt-in checkout advice.
 
 ## Core invariants
 
@@ -320,6 +320,13 @@ modelvault git-hook install
 The hook only runs `modelvault checkout-advice`. It never contacts a remote,
 pulls objects, or materializes files automatically. Existing Git hooks are
 preserved unless `--force` is explicitly supplied.
+
+## Optional release attestations
+
+Optional Ed25519 attestations bind the deterministic ModelVault manifest
+serialization without changing artifact identity. See [Provenance and
+attestations](docs/provenance.md#attestations) for the feature-gated key,
+attest, and verification workflow.
 
 See [docs/remotes.md](docs/remotes.md).
 

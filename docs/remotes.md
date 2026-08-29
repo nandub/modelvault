@@ -96,8 +96,9 @@ For the full default, S3-build, and MinIO acceptance gate in one command, run:
 ```
 
 The script starts a loopback-only MinIO container with generated credentials,
-creates a unique bucket, deep-verifies a push, then creates a clean Git clone
-that deep-verifies a pull, checkout, and `fsck --deep`. It removes the unique
+creates a unique bucket, deep-verifies a push plus `remote fsck --deep`,
+`remote storage`, and dry-run `remote gc`, then creates a clean Git clone that
+deep-verifies a pull, checkout, and `fsck --deep`. It removes the unique
 container, bucket data, clone, temporary remote configuration, and any MinIO
 images it downloaded. `-KeepArtifacts` retains the container and clone for
 failure investigation. The source repository must normally be clean; use

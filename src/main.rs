@@ -72,11 +72,11 @@ enum RemoteCommand {
     Remove { name: String },
     /// Set the default remote used when push/pull omit a selector.
     Default { name: String },
-    /// Audit a filesystem/UNC remote's manifests and CAS objects.
+    /// Audit a filesystem/UNC remote, or an S3/MinIO remote when built with the s3 feature.
     Fsck { name: String, #[arg(long)] deep: bool },
-    /// Report logical and physical storage use for a filesystem/UNC remote.
+    /// Report logical and physical storage use for a filesystem/UNC remote, or S3/MinIO with the s3 feature.
     Storage { name: String },
-    /// Find unreachable objects on a filesystem/UNC remote. Deletion requires --prune.
+    /// Find unreachable objects on a remote. S3/MinIO requires the s3 feature; deletion requires --prune.
     Gc { name: String, #[arg(long)] prune: bool },
 }
 
