@@ -274,6 +274,9 @@ modelvault remote add origin D:\ModelVaultRemote --default
 modelvault push .\models\model.safetensors.mvptr --remote-name origin
 modelvault pull .\models\model.safetensors.mvptr --remote-name origin
 modelvault remote fsck origin --deep
+modelvault remote storage origin
+modelvault remote gc origin
+modelvault remote gc origin --prune
 ```
 
 Direct filesystem path remains supported:

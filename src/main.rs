@@ -72,6 +72,10 @@ enum RemoteCommand {
     Default { name: String },
     /// Audit a filesystem/UNC remote's manifests and CAS objects.
     Fsck { name: String, #[arg(long)] deep: bool },
+    /// Report logical and physical storage use for a filesystem/UNC remote.
+    Storage { name: String },
+    /// Find unreachable objects on a filesystem/UNC remote. Deletion requires --prune.
+    Gc { name: String, #[arg(long)] prune: bool },
 }
 
 #[derive(Debug, Subcommand)]
@@ -907,6 +911,27 @@ fn remote_cmd(command: RemoteCommand, store: &Path) -> anyhow::Result<()> {
                 for error in &report.manifest_errors { println!("- {error}"); }
             }
             anyhow::ensure!(report.is_ok(), "remote integrity check failed");
+        }
+        RemoteCommand::Storage { name } => {
+            let remote = config.remotes.get(&name).ok_or_else(|| anyhow::anyhow!("unknown remote '{name}'"))?;
+            anyhow::ensure!(remote.kind == "filesystem", "remote storage currently requires a filesystem/UNC remote; S3/MinIO remote-wide listing is not implemented yet");
+            let remote_path = remote.filesystem_path()?;
+            let report = storage_report(remote_path)?;
+            println!("ModelVault remote storage\nRemote:             {}\nStore:              {}\nManifests:          {}\nLogical bytes:      {}\nPhysical bytes:     {}\nReachable objects:  {}\nOrphan objects:     {}\nOrphan bytes:       {}",
+                name, remote_path.display(), report.manifests, report.logical_bytes, report.physical_bytes,
+                report.reachable_objects, report.orphan_objects, report.orphan_bytes);
+        }
+        RemoteCommand::Gc { name, prune } => {
+            let remote = config.remotes.get(&name).ok_or_else(|| anyhow::anyhow!("unknown remote '{name}'"))?;
+            anyhow::ensure!(remote.kind == "filesystem", "remote gc currently requires a filesystem/UNC remote; S3/MinIO remote-wide listing is not implemented yet");
+            let remote_path = remote.filesystem_path()?;
+            let report = gc(remote_path, prune)?;
+            println!("ModelVault remote gc\nRemote:          {}\nStore:           {}\nMode:            {}\nOrphan objects:  {}\nOrphan bytes:    {}\nRemoved objects: {}\nRemoved bytes:   {}",
+                name, remote_path.display(), if prune { "prune" } else { "dry-run" }, report.orphan_objects,
+                report.orphan_bytes, report.removed_objects, report.removed_bytes);
+            if !prune && report.orphan_objects > 0 {
+                println!("No remote objects were deleted. Re-run with --prune to remove unreachable objects.");
+            }
         }
     }
     Ok(())
