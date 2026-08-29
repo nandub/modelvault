@@ -2,12 +2,15 @@
 
 ## Unreleased
 
+## 1.7.0 - Remote lifecycle, derived artifacts, and CI
+
 - Added `extract-tensors` for verified derived Safetensors output, with exact and prefix selectors, optional repository registration, and `extract-tensors` lineage.
 - Added JSON and Markdown tensor-aware model comparison reports.
 - Added optional Ed25519 manifest attestations and local key-pair generation behind the `signing` Cargo feature.
 - Added `remote fsck`, `remote storage`, and dry-run/`--prune` `remote gc` for filesystem/UNC and optional S3/MinIO remotes.
 - Added bounded, prefix-contained S3/MinIO audit listing and MinIO acceptance coverage for remote audit/storage/GC.
 - Added opt-in Git post-checkout advice hooks that never fetch or materialize artifacts automatically.
+- Added GitHub Actions CI for locked validation on Windows, Linux, and macOS, plus an optional S3 build gate.
 - No artifact-ID, CAS-ID, manifest-v1, pointer-v1, pack, delta, or repository-format identity changes.
 
 ## 1.6.1 - Rust 1.96 compatibility fix

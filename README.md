@@ -2,7 +2,7 @@
 
 ModelVault is an experimental tensor-aware, content-addressed storage layer for large AI artifacts. Git tracks small pointer/manifests while ModelVault stores reusable binary chunks in a local or remote CAS.
 
-Current release line: **1.6.x**. The implementation includes Safetensors-aware chunking and selective derived extraction, exact materialization, Git pointers, imports, Hugging Face provenance and lineage, JSON/Markdown model comparison reports, optional Ed25519 attestations, repository integrity/GC, pack/delta optimization, filesystem remotes, optional S3/MinIO audit/lifecycle support, and opt-in checkout advice.
+Current release line: **1.7.x**. The implementation includes Safetensors-aware chunking and selective derived extraction, exact materialization, Git pointers, imports, Hugging Face provenance and lineage, JSON/Markdown model comparison reports, optional Ed25519 attestations, repository integrity/GC, pack/delta optimization, filesystem remotes, optional S3/MinIO audit/lifecycle support, and opt-in checkout advice.
 
 ## Core invariants
 
