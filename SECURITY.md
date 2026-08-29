@@ -103,6 +103,10 @@ and be removed promptly when a compatible upstream fix is available. Current
 exceptions apply only to the feature-gated AWS S3 stack; the workflow continues
 to audit all other dependencies.
 
+Dependabot proposes weekly updates for Cargo dependencies and GitHub Actions.
+These pull requests remain subject to the normal required CI and security
+checks; ModelVault does not enable automatic merging for dependency updates.
+
 The normal build excludes the AWS SDK. S3 support is opt-in with `--features s3`.
 
 ## Non-goals
