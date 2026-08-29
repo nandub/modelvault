@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.7.1 - Release pipeline hardening
 
 - Added keyless Sigstore bundles for GitHub Release archives and `SHA256SUMS`.
 - Pinned CI, security, and release workflow actions to immutable commits and
