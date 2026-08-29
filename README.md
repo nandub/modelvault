@@ -65,7 +65,8 @@ Each release asset and `SHA256SUMS` receive a keyless Sigstore bundle. See
 
 The `Security` workflow runs on pushes and pull requests, with a weekly Monday
 schedule. It checks `Cargo.lock` against RustSec advisories and performs a
-Semgrep static scan with metrics disabled.
+Semgrep static scan with metrics disabled. Third-party Actions are pinned to
+immutable commit IDs and the Semgrep container is pinned by digest.
 
 Optional security tooling:
 

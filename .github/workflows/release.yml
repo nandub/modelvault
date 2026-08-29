@@ -45,11 +45,11 @@ jobs:
             target: aarch64-apple-darwin
             binary: target/aarch64-apple-darwin/release/modelvault
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
           ref: ${{ inputs.tag || github.ref }}
-      - uses: dtolnay/rust-toolchain@1.94.1
-      - uses: Swatinem/rust-cache@v2
+      - uses: dtolnay/rust-toolchain@a54c7afa936fefeb4456b2dd8068152669aa8203 # 1.94.1
+      - uses: Swatinem/rust-cache@82a92a6e8fbeee089604da2575dc567ae9ddeaab # v2
       - run: cargo build --locked --release --target ${{ matrix.target }}
       - name: Verify release binary
         shell: pwsh
@@ -60,7 +60,7 @@ jobs:
           New-Item -ItemType Directory -Path release-assets | Out-Null
           $archive = "release-assets/modelvault-$env:RELEASE_TAG-${{ matrix.target }}.zip"
           Compress-Archive -Path '${{ matrix.binary }}' -DestinationPath $archive
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: modelvault-${{ matrix.target }}
           path: release-assets/*.zip
@@ -74,7 +74,7 @@ jobs:
       contents: write
       id-token: write
     steps:
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4.3.0
         with:
           pattern: modelvault-*
           merge-multiple: true
@@ -89,7 +89,7 @@ jobs:
               "$hash  $($_.Name)"
             } | Set-Content -NoNewline release-assets/SHA256SUMS
       - name: Install Cosign
-        uses: sigstore/cosign-installer@v4.1.0
+        uses: sigstore/cosign-installer@ba7bc0a3fef59531c69a25acd34668d6d3fe6f22 # v4.1.0
       - name: Keylessly sign release assets
         shell: bash
         run: |

@@ -17,20 +17,26 @@ jobs:
     name: RustSec dependency audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: dtolnay/rust-toolchain@stable
-      - uses: pirafrank/audit-check-action@v1
-        with:
-          # Optional AWS S3 currently retains aws-smithy-http-client 1.4.0,
-          # which requires the vulnerable pre-0.4 h2/rustls-webpki line. Review
-          # and remove these exceptions when AWS publishes a compatible fix.
-          ignore: RUSTSEC-2026-0258,RUSTSEC-2026-0098,RUSTSEC-2026-0099,RUSTSEC-2026-0104
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: dtolnay/rust-toolchain@a54c7afa936fefeb4456b2dd8068152669aa8203 # 1.94.1
+      - name: Install cargo-audit
+        run: cargo install cargo-audit --version 0.22.2 --locked
+      - name: Audit dependencies
+        run: >-
+          cargo audit
+          --ignore RUSTSEC-2026-0258
+          --ignore RUSTSEC-2026-0098
+          --ignore RUSTSEC-2026-0099
+          --ignore RUSTSEC-2026-0104
+        # Optional AWS S3 currently retains aws-smithy-http-client 1.4.0,
+        # which requires the vulnerable pre-0.4 h2/rustls-webpki line. Review
+        # and remove these exceptions when AWS publishes a compatible fix.
 
   semgrep:
     name: Semgrep static analysis
     runs-on: ubuntu-latest
     container:
-      image: semgrep/semgrep:latest
+      image: semgrep/semgrep@sha256:155f999d01d02b33aa5a8db9186eb20dcd0154ce1a0ac6fce8d80674d0ace235
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
       - run: semgrep scan --config p/rust --metrics off

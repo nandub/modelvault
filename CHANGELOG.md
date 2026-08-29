@@ -3,6 +3,8 @@
 ## Unreleased
 
 - Added keyless Sigstore bundles for GitHub Release archives and `SHA256SUMS`.
+- Pinned CI, security, and release workflow actions to immutable commits and
+  the Semgrep container to a manifest digest.
 
 ## 1.7.0 - Remote lifecycle, derived artifacts, and CI
 
