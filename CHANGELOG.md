@@ -6,6 +6,7 @@
   hashes if a published checksum mismatch persists.
 - Generate checksums and Sigstore bundles from archives downloaded from the
   GitHub Release, then smoke-test those uploaded release files.
+- Fixed `SHA256SUMS` generation to write one record per release archive.
 
 ## 1.7.1 - Release pipeline hardening
 
