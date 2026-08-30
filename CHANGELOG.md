@@ -10,6 +10,7 @@
   core version and binary validations.
 - Fixed release workflow script paths for Linux and macOS runners.
 - Checked out release scripts in the publish job before invoking them.
+- Install Cosign before the release verification script signs assets.
 
 ## 1.7.2 - Release smoke reliability
 

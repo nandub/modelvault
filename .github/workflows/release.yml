@@ -87,13 +87,13 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: ./scripts/release/Publish-ReleaseAssets.ps1 -ReleaseTag $env:RELEASE_TAG -Repository $env:GITHUB_REPOSITORY -AssetPaths (Get-ChildItem release-assets -Filter '*.zip' | Select-Object -ExpandProperty FullName) -CreateRelease
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@ba7bc0a3fef59531c69a25acd34668d6d3fe6f22 # v4.1.0
       - name: Download published archives and create verification assets
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
         run: ./scripts/release/Create-ReleaseVerificationAssets.ps1 -ReleaseTag $env:RELEASE_TAG -Repository $env:GITHUB_REPOSITORY
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@ba7bc0a3fef59531c69a25acd34668d6d3fe6f22 # v4.1.0
       - name: Upload checksums and signature bundles
         env:
           GH_TOKEN: ${{ github.token }}
