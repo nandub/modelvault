@@ -27,7 +27,8 @@ $unreleased = [regex]::Match($changelog, '(?ms)^## Unreleased\r?\n(?<notes>.*?)(
 if (-not $unreleased.Success -or [string]::IsNullOrWhiteSpace($unreleased.Groups['notes'].Value)) {
     throw 'CHANGELOG.md needs a non-empty Unreleased section.'
 }
-$newChangelog = $changelog.Remove($unreleased.Index, $unreleased.Length).Insert($unreleased.Index, "## $Version - $ReleaseTitle`r`n" + $unreleased.Groups['notes'].Value)
+$newline = if ($changelog.Contains("`r`n")) { "`r`n" } else { "`n" }
+$newChangelog = $changelog.Remove($unreleased.Index, $unreleased.Length).Insert($unreleased.Index, "## $Version - $ReleaseTitle$newline" + $unreleased.Groups['notes'].Value)
 Write-ReleaseFile $tomlPath $newToml
 Write-ReleaseFile $lockPath $newLock
 Write-ReleaseFile $changelogPath $newChangelog
