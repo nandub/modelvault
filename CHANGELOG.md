@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.7.4 - Release automation
 
 - Added a release-preparation helper and release workflow version-consistency gate.
 

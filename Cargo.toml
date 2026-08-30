@@ -1,6 +1,6 @@
 [package]
 name = "modelvault"
-version = "1.7.2"
+version = "1.7.4"
 edition = "2021"
 rust-version = "1.94.1"
 description = "Tensor-aware content-addressed storage for AI artifacts"
