@@ -54,14 +54,14 @@ jobs:
       - uses: Swatinem/rust-cache@82a92a6e8fbeee089604da2575dc567ae9ddeaab # v2
       - name: Verify release version metadata
         shell: pwsh
-        run: .\scripts\release\Verify-ReleaseVersion.ps1 -ReleaseTag $env:RELEASE_TAG
+        run: ./scripts/release/Verify-ReleaseVersion.ps1 -ReleaseTag $env:RELEASE_TAG
       - run: cargo build --locked --release --target ${{ matrix.target }}
       - name: Verify release binary
         shell: pwsh
-        run: .\scripts\release\Verify-ReleaseBinary.ps1 -ReleaseTag $env:RELEASE_TAG -BinaryPath '${{ matrix.binary }}'
+        run: ./scripts/release/Verify-ReleaseBinary.ps1 -ReleaseTag $env:RELEASE_TAG -BinaryPath '${{ matrix.binary }}'
       - name: Package binary
         shell: pwsh
-        run: .\scripts\release\Package-ReleaseBinary.ps1 -BinaryPath '${{ matrix.binary }}' -ArchivePath "release-assets/modelvault-$env:RELEASE_TAG-${{ matrix.target }}.zip"
+        run: ./scripts/release/Package-ReleaseBinary.ps1 -BinaryPath '${{ matrix.binary }}' -ArchivePath "release-assets/modelvault-$env:RELEASE_TAG-${{ matrix.target }}.zip"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: modelvault-${{ matrix.target }}
@@ -85,21 +85,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
-        run: .\scripts\release\Publish-ReleaseAssets.ps1 -ReleaseTag $env:RELEASE_TAG -Repository $env:GITHUB_REPOSITORY -AssetPaths (Get-ChildItem release-assets -Filter '*.zip' | Select-Object -ExpandProperty FullName) -CreateRelease
+        run: ./scripts/release/Publish-ReleaseAssets.ps1 -ReleaseTag $env:RELEASE_TAG -Repository $env:GITHUB_REPOSITORY -AssetPaths (Get-ChildItem release-assets -Filter '*.zip' | Select-Object -ExpandProperty FullName) -CreateRelease
       - name: Download published archives and create verification assets
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
-        run: .\scripts\release\Create-ReleaseVerificationAssets.ps1 -ReleaseTag $env:RELEASE_TAG -Repository $env:GITHUB_REPOSITORY
+        run: ./scripts/release/Create-ReleaseVerificationAssets.ps1 -ReleaseTag $env:RELEASE_TAG -Repository $env:GITHUB_REPOSITORY
       - name: Install Cosign
         uses: sigstore/cosign-installer@ba7bc0a3fef59531c69a25acd34668d6d3fe6f22 # v4.1.0
       - name: Upload checksums and signature bundles
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
-        run: .\scripts\release\Publish-ReleaseAssets.ps1 -ReleaseTag $env:RELEASE_TAG -Repository $env:GITHUB_REPOSITORY -AssetPaths (Get-ChildItem published-assets | Where-Object { $_.Name -eq 'SHA256SUMS' -or $_.Name.EndsWith('.sigstore.json') } | Select-Object -ExpandProperty FullName)
+        run: ./scripts/release/Publish-ReleaseAssets.ps1 -ReleaseTag $env:RELEASE_TAG -Repository $env:GITHUB_REPOSITORY -AssetPaths (Get-ChildItem published-assets | Where-Object { $_.Name -eq 'SHA256SUMS' -or $_.Name.EndsWith('.sigstore.json') } | Select-Object -ExpandProperty FullName)
       - name: Smoke-test published Linux archive
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
-        run: .\scripts\release\Smoke-TestPublishedRelease.ps1 -ReleaseTag $env:RELEASE_TAG -Repository $env:GITHUB_REPOSITORY
+        run: ./scripts/release/Smoke-TestPublishedRelease.ps1 -ReleaseTag $env:RELEASE_TAG -Repository $env:GITHUB_REPOSITORY

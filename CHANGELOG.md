@@ -8,6 +8,7 @@
 - Added a release-preparation helper and release workflow version-consistency gate.
 - Added local and CI checks that parse the release scripts and exercise their
   core version and binary validations.
+- Fixed release workflow script paths for Linux and macOS runners.
 
 ## 1.7.2 - Release smoke reliability
 
