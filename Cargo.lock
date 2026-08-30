@@ -1661,7 +1661,7 @@ dependencies = [
 
 [[package]]
 name = "modelvault"
-version = "1.7.5"
+version = "1.7.6"
 dependencies = [
  "anyhow",
  "aws-config",
