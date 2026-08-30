@@ -7,6 +7,6 @@ try {
     $metadata = cargo metadata --locked --no-deps --format-version 1 | ConvertFrom-Json
     $package = @($metadata.packages | Where-Object { $_.name -eq 'modelvault' })
     if ($package.Count -ne 1 -or $package[0].version -ne $expected) { throw "Cargo package version must be $expected for $ReleaseTag." }
-    $lockPattern = '(?ms)^name = "modelvault"\r?\nversion = "{0}"$' -f [regex]::Escape($expected)
+    $lockPattern = 'name\s*=\s*"modelvault"\s+version\s*=\s*"{0}"' -f [regex]::Escape($expected)
     if ((Get-Content Cargo.lock -Raw) -notmatch $lockPattern) { throw "Cargo.lock must record ModelVault version $expected." }
 } finally { Pop-Location }
