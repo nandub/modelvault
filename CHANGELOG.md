@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.7.5 - Release workflow validation
 
 - Fixed PowerShell parsing in the release version-consistency gate.
 
