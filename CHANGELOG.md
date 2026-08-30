@@ -9,6 +9,7 @@
 - Added local and CI checks that parse the release scripts and exercise their
   core version and binary validations.
 - Fixed release workflow script paths for Linux and macOS runners.
+- Checked out release scripts in the publish job before invoking them.
 
 ## 1.7.2 - Release smoke reliability
 
