@@ -64,6 +64,9 @@ workflow then downloads the published Linux archive, verifies it against
 
 Each release asset and `SHA256SUMS` receive a keyless Sigstore bundle. See
 [release artifact signing](docs/release-signing.md) for verification commands.
+The workflow derives these verification assets from archives downloaded back
+from the GitHub Release, then performs its smoke test against those uploaded
+release files.
 
 The `Security` workflow runs on pushes and pull requests, with a weekly Monday
 schedule. It checks `Cargo.lock` against RustSec advisories and performs a

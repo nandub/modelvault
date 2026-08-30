@@ -86,24 +86,7 @@ jobs:
           pattern: modelvault-*
           merge-multiple: true
           path: release-assets
-      - name: Create checksum manifest
-        shell: pwsh
-        run: |
-          Get-ChildItem release-assets -Filter '*.zip' |
-            Sort-Object Name |
-            ForEach-Object {
-              $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
-              "$hash  $($_.Name)"
-            } | Set-Content -NoNewline release-assets/SHA256SUMS
-      - name: Install Cosign
-        uses: sigstore/cosign-installer@ba7bc0a3fef59531c69a25acd34668d6d3fe6f22 # v4.1.0
-      - name: Keylessly sign release assets
-        shell: bash
-        run: |
-          for asset in release-assets/*.zip release-assets/SHA256SUMS; do
-            cosign sign-blob --yes --bundle "${asset}.sigstore.json" "$asset"
-          done
-      - name: Create or update GitHub Release
+      - name: Create or update GitHub Release and upload archives
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
@@ -113,8 +96,40 @@ jobs:
             gh release create $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --generate-notes
             if ($LASTEXITCODE -ne 0) { throw 'Unable to create GitHub Release.' }
           }
-          gh release upload $env:RELEASE_TAG release-assets/* --repo $env:GITHUB_REPOSITORY --clobber
-          if ($LASTEXITCODE -ne 0) { throw 'Unable to upload release assets.' }
+          gh release upload $env:RELEASE_TAG release-assets/*.zip --repo $env:GITHUB_REPOSITORY --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to upload release archives.' }
+      - name: Download published archives and create verification assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Path published-assets | Out-Null
+          gh release download $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --pattern '*.zip' --dir published-assets
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to download published release archives.' }
+          $archives = @(Get-ChildItem published-assets -Filter '*.zip' | Sort-Object Name)
+          if ($archives.Count -ne 5) { throw "Expected five published release archives; found $($archives.Count)." }
+          $archives | ForEach-Object {
+            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
+            "$hash  $($_.Name)"
+          } | Set-Content -NoNewline published-assets/SHA256SUMS
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@ba7bc0a3fef59531c69a25acd34668d6d3fe6f22 # v4.1.0
+      - name: Keylessly sign published release assets
+        shell: bash
+        run: |
+          for asset in published-assets/*.zip published-assets/SHA256SUMS; do
+            cosign sign-blob --yes --bundle "${asset}.sigstore.json" "$asset"
+          done
+      - name: Upload checksums and signature bundles
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: pwsh
+        run: |
+          $verificationAssets = Get-ChildItem published-assets |
+            Where-Object { $_.Name -eq 'SHA256SUMS' -or $_.Name.EndsWith('.sigstore.json') } |
+            Select-Object -ExpandProperty FullName
+          gh release upload $env:RELEASE_TAG $verificationAssets --repo $env:GITHUB_REPOSITORY --clobber
+          if ($LASTEXITCODE -ne 0) { throw 'Unable to upload checksums and signature bundles.' }
       - name: Smoke-test published Linux archive
         env:
           GH_TOKEN: ${{ github.token }}

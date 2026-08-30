@@ -4,6 +4,8 @@
 
 - Made the release smoke test retry release-asset downloads and report both
   hashes if a published checksum mismatch persists.
+- Generate checksums and Sigstore bundles from archives downloaded from the
+  GitHub Release, then smoke-test those uploaded release files.
 
 ## 1.7.1 - Release pipeline hardening
 
