@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Added a release-preparation helper and release workflow version-consistency gate.
+
 ## 1.7.2 - Release smoke reliability
 
 - Made the release smoke test retry release-asset downloads and report both

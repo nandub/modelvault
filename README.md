@@ -68,6 +68,15 @@ The workflow derives these verification assets from archives downloaded back
 from the GitHub Release, then performs its smoke test against those uploaded
 release files.
 
+Prepare releases with the helper after adding notes under `## Unreleased`:
+
+```powershell
+.\scripts\Prepare-Release.ps1 -Version 1.7.4 -ReleaseTitle 'Release automation'
+```
+
+The release workflow rejects a tag when its version differs from `Cargo.toml`,
+`Cargo.lock`, or the built CLI.
+
 The `Security` workflow runs on pushes and pull requests, with a weekly Monday
 schedule. It checks `Cargo.lock` against RustSec advisories and performs a
 Semgrep static scan with metrics disabled. Third-party Actions are pinned to
