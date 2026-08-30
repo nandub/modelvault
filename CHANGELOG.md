@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.7.2 - Release smoke reliability
 
 - Made the release smoke test retry release-asset downloads and report both
   hashes if a published checksum mismatch persists.
