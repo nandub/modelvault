@@ -17,7 +17,7 @@ jobs:
     name: RustSec dependency audit
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: dtolnay/rust-toolchain@a54c7afa936fefeb4456b2dd8068152669aa8203 # v1
         with:
           toolchain: stable
@@ -40,5 +40,5 @@ jobs:
     container:
       image: semgrep/semgrep@sha256:155f999d01d02b33aa5a8db9186eb20dcd0154ce1a0ac6fce8d80674d0ace235
     steps:
-      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - run: semgrep scan --config p/rust --metrics off
