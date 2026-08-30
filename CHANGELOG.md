@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Added an optional signing-feature CI gate for build, tests, and strict Clippy.
+
 ## 1.7.5 - Release workflow validation
 
 - Fixed PowerShell parsing in the release version-consistency gate.
