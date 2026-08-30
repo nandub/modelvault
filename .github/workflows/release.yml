@@ -54,31 +54,14 @@ jobs:
       - uses: Swatinem/rust-cache@82a92a6e8fbeee089604da2575dc567ae9ddeaab # v2
       - name: Verify release version metadata
         shell: pwsh
-        run: |
-          $expectedVersion = $env:RELEASE_TAG -replace '^v', ''
-          $metadata = cargo metadata --locked --no-deps --format-version 1 | ConvertFrom-Json
-          $package = @($metadata.packages | Where-Object { $_.name -eq 'modelvault' })
-          if ($package.Count -ne 1 -or $package[0].version -ne $expectedVersion) { throw "Cargo package version must be $expectedVersion." }
-          $lockPattern = "(?ms)^name = \"modelvault\"`r?`nversion = \"$([regex]::Escape($expectedVersion))\"$"
-          if ((Get-Content Cargo.lock -Raw) -notmatch $lockPattern) { throw "Cargo.lock must record ModelVault version $expectedVersion." }
+        run: .\scripts\release\Verify-ReleaseVersion.ps1 -ReleaseTag $env:RELEASE_TAG
       - run: cargo build --locked --release --target ${{ matrix.target }}
       - name: Verify release binary
         shell: pwsh
-        run: |
-          $expectedVersion = $env:RELEASE_TAG -replace '^v', ''
-          $reportedVersion = (& '${{ matrix.binary }}' -V).Trim()
-          if ($reportedVersion -ne "modelvault $expectedVersion") { throw "Release binary reports '$reportedVersion'; expected 'modelvault $expectedVersion'." }
+        run: .\scripts\release\Verify-ReleaseBinary.ps1 -ReleaseTag $env:RELEASE_TAG -BinaryPath '${{ matrix.binary }}'
       - name: Package binary
         shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Path release-assets | Out-Null
-          $archive = "release-assets/modelvault-$env:RELEASE_TAG-${{ matrix.target }}.zip"
-          if ($IsWindows) {
-            Compress-Archive -Path '${{ matrix.binary }}' -DestinationPath $archive
-          } else {
-            & zip -j $archive '${{ matrix.binary }}'
-            if ($LASTEXITCODE -ne 0) { throw 'Unable to create release archive.' }
-          }
+        run: .\scripts\release\Package-ReleaseBinary.ps1 -BinaryPath '${{ matrix.binary }}' -ArchivePath "release-assets/modelvault-$env:RELEASE_TAG-${{ matrix.target }}.zip"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: modelvault-${{ matrix.target }}
@@ -102,78 +85,21 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
-        run: |
-          gh release view $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY *> $null
-          if ($LASTEXITCODE -ne 0) {
-            gh release create $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --generate-notes
-            if ($LASTEXITCODE -ne 0) { throw 'Unable to create GitHub Release.' }
-          }
-          gh release upload $env:RELEASE_TAG release-assets/*.zip --repo $env:GITHUB_REPOSITORY --clobber
-          if ($LASTEXITCODE -ne 0) { throw 'Unable to upload release archives.' }
+        run: .\scripts\release\Publish-ReleaseAssets.ps1 -ReleaseTag $env:RELEASE_TAG -Repository $env:GITHUB_REPOSITORY -AssetPaths (Get-ChildItem release-assets -Filter '*.zip' | Select-Object -ExpandProperty FullName) -CreateRelease
       - name: Download published archives and create verification assets
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
-        run: |
-          New-Item -ItemType Directory -Path published-assets | Out-Null
-          gh release download $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY --pattern '*.zip' --dir published-assets
-          if ($LASTEXITCODE -ne 0) { throw 'Unable to download published release archives.' }
-          $archives = @(Get-ChildItem published-assets -Filter '*.zip' | Sort-Object Name)
-          if ($archives.Count -ne 5) { throw "Expected five published release archives; found $($archives.Count)." }
-          $archives | ForEach-Object {
-            $hash = (Get-FileHash -Algorithm SHA256 -LiteralPath $_.FullName).Hash.ToLowerInvariant()
-            "$hash  $($_.Name)"
-          } | Set-Content published-assets/SHA256SUMS
+        run: .\scripts\release\Create-ReleaseVerificationAssets.ps1 -ReleaseTag $env:RELEASE_TAG -Repository $env:GITHUB_REPOSITORY
       - name: Install Cosign
         uses: sigstore/cosign-installer@ba7bc0a3fef59531c69a25acd34668d6d3fe6f22 # v4.1.0
-      - name: Keylessly sign published release assets
-        shell: bash
-        run: |
-          for asset in published-assets/*.zip published-assets/SHA256SUMS; do
-            cosign sign-blob --yes --bundle "${asset}.sigstore.json" "$asset"
-          done
       - name: Upload checksums and signature bundles
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
-        run: |
-          $verificationAssets = Get-ChildItem published-assets |
-            Where-Object { $_.Name -eq 'SHA256SUMS' -or $_.Name.EndsWith('.sigstore.json') } |
-            Select-Object -ExpandProperty FullName
-          gh release upload $env:RELEASE_TAG $verificationAssets --repo $env:GITHUB_REPOSITORY --clobber
-          if ($LASTEXITCODE -ne 0) { throw 'Unable to upload checksums and signature bundles.' }
+        run: .\scripts\release\Publish-ReleaseAssets.ps1 -ReleaseTag $env:RELEASE_TAG -Repository $env:GITHUB_REPOSITORY -AssetPaths (Get-ChildItem published-assets | Where-Object { $_.Name -eq 'SHA256SUMS' -or $_.Name.EndsWith('.sigstore.json') } | Select-Object -ExpandProperty FullName)
       - name: Smoke-test published Linux archive
         env:
           GH_TOKEN: ${{ github.token }}
         shell: pwsh
-        run: |
-          $assetName = "modelvault-$env:RELEASE_TAG-x86_64-unknown-linux-gnu.zip"
-          $extractDirectory = Join-Path $PWD 'release-smoke-extract'
-          $verifiedArchive = $null
-          $expectedHash = $null
-          $actualHash = $null
-          foreach ($attempt in 1..3) {
-            $downloadDirectory = Join-Path $PWD "release-smoke-download-$attempt"
-            New-Item -ItemType Directory -Path $downloadDirectory | Out-Null
-            gh release download $env:RELEASE_TAG --repo $env:GITHUB_REPOSITORY `
-              --pattern $assetName --pattern SHA256SUMS --dir $downloadDirectory
-            if ($LASTEXITCODE -ne 0) { throw 'Unable to download published release assets.' }
-
-            $checksumLine = Get-Content (Join-Path $downloadDirectory 'SHA256SUMS') |
-              Where-Object { $_ -match "  $([regex]::Escape($assetName))$" }
-            if (@($checksumLine).Count -ne 1) { throw "Expected one checksum entry for $assetName." }
-            $expectedHash = ($checksumLine -split '\s+', 2)[0].ToLowerInvariant()
-            $actualHash = (Get-FileHash -Algorithm SHA256 -LiteralPath (Join-Path $downloadDirectory $assetName)).Hash.ToLowerInvariant()
-            if ($actualHash -eq $expectedHash) {
-              $verifiedArchive = Join-Path $downloadDirectory $assetName
-              break
-            }
-            if ($attempt -lt 3) { Start-Sleep -Seconds (5 * $attempt) }
-          }
-          if ($null -eq $verifiedArchive) {
-            throw "Checksum mismatch for $assetName after three downloads. Expected $expectedHash; got $actualHash."
-          }
-
-          Expand-Archive -LiteralPath $verifiedArchive -DestinationPath $extractDirectory
-          & (Join-Path $extractDirectory 'modelvault') -V
-          if ($LASTEXITCODE -ne 0) { throw 'Published ModelVault binary failed its version check.' }
+        run: .\scripts\release\Smoke-TestPublishedRelease.ps1 -ReleaseTag $env:RELEASE_TAG -Repository $env:GITHUB_REPOSITORY

@@ -15,6 +15,16 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  release-script-check:
+    name: release script checks
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+      - uses: dtolnay/rust-toolchain@a54c7afa936fefeb4456b2dd8068152669aa8203 # v1
+        with:
+          toolchain: 1.94.1
+      - run: .\scripts\Test-ReleaseScripts.ps1
+
   validate:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}

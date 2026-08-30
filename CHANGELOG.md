@@ -1,8 +1,13 @@
 # Changelog
 
+## Unreleased
+
+- Fixed PowerShell parsing in the release version-consistency gate.
 
 ## 1.7.4 - Release automation
 - Added a release-preparation helper and release workflow version-consistency gate.
+- Added local and CI checks that parse the release scripts and exercise their
+  core version and binary validations.
 
 ## 1.7.2 - Release smoke reliability
 
