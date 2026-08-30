@@ -7,7 +7,7 @@ use std::{
 use anyhow::{ensure, Context};
 use base64::{engine::general_purpose::STANDARD, Engine as _};
 use ed25519_dalek::{Signature, Signer, SigningKey, Verifier, VerifyingKey};
-use rand_core::OsRng;
+use getrandom::{rand_core::UnwrapErr, SysRng};
 use serde::{Deserialize, Serialize};
 
 use crate::manifest::ArtifactManifest;
@@ -78,7 +78,8 @@ pub fn generate_key_pair(private_key_path: &Path, public_key_path: &Path) -> any
         private_key_path != public_key_path,
         "private and public key paths must differ"
     );
-    let signing = SigningKey::generate(&mut OsRng);
+    let mut csprng = UnwrapErr(SysRng);
+    let signing = SigningKey::generate(&mut csprng);
     let verifying = VerifyingKey::from(&signing);
     write_new_key(private_key_path, &signing.to_bytes(), "private")?;
     if let Err(error) = write_new_key(public_key_path, &verifying.to_bytes(), "public") {

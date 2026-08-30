@@ -10,7 +10,7 @@ license = "Apache-2.0 OR MIT"
 default = ["compression"]
 compression = ["dep:zstd"]
 s3 = ["dep:aws-config", "dep:aws-sdk-s3", "dep:tokio"]
-signing = ["dep:base64", "dep:ed25519-dalek", "dep:rand_core"]
+signing = ["dep:base64", "dep:ed25519-dalek", "dep:getrandom"]
 
 [dependencies]
 anyhow = "1"
@@ -27,8 +27,8 @@ aws-config = { version = "=1.11.0", optional = true }
 aws-sdk-s3 = { version = "=1.144.0", optional = true }
 tokio = { version = "1", features = ["rt-multi-thread", "time", "net"], optional = true }
 base64 = { version = "0.23", optional = true }
-ed25519-dalek = { version = "2.2", features = ["rand_core"], optional = true }
-rand_core = { version = "0.6", features = ["getrandom"], optional = true }
+ed25519-dalek = { version = "3.0", features = ["rand_core"], optional = true }
+getrandom = { version = "0.4", features = ["sys_rng"], optional = true }
 
 [dev-dependencies]
 tempfile = "3"

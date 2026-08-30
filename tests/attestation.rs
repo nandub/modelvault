@@ -46,13 +46,17 @@ fn key_generation_creates_base64_keys_without_overwriting_existing_files() -> an
     let private = temp.path().join("private.key");
     let public = temp.path().join("public.key");
     generate_key_pair(&private, &public)?;
+    let private_bytes: [u8; 32] = STANDARD
+        .decode(fs::read_to_string(&private)?.trim())?
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("generated private key must be 32 bytes"))?;
+    let public_bytes: [u8; 32] = STANDARD
+        .decode(fs::read_to_string(&public)?.trim())?
+        .try_into()
+        .map_err(|_| anyhow::anyhow!("generated public key must be 32 bytes"))?;
     assert_eq!(
-        STANDARD.decode(fs::read_to_string(&private)?.trim())?.len(),
-        32
-    );
-    assert_eq!(
-        STANDARD.decode(fs::read_to_string(&public)?.trim())?.len(),
-        32
+        VerifyingKey::from(&SigningKey::from_bytes(&private_bytes)).to_bytes(),
+        public_bytes
     );
     assert!(generate_key_pair(&private, &public).is_err());
     Ok(())

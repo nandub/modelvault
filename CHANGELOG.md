@@ -3,6 +3,8 @@
 ## Unreleased
 
 - Added an optional signing-feature CI gate for build, tests, and strict Clippy.
+- Updated optional signing key generation for `ed25519-dalek` 3 compatibility,
+  continuing to use the operating system CSPRNG.
 
 ## 1.7.5 - Release workflow validation
 
