@@ -145,7 +145,7 @@ storage/reconstruction, and final verification progress on standard error.
 `track` is for an artifact whose logical path is already inside the Git work tree:
 
 ```powershell
-modelvault track .\models\model.safetensors --stage
+modelvault track .\models\model.safetensors --stage --progress
 ```
 
 This creates `model.safetensors.mvptr`, writes its manifest under `.modelvault/manifests/`, ignores the large logical artifact and physical CAS storage, and optionally stages Git metadata.
@@ -157,7 +157,8 @@ This creates `model.safetensors.mvptr`, writes its manifest under `.modelvault/m
 ```powershell
 modelvault import C:\external\model.safetensors `
   --to models\demo\model.safetensors `
-  --stage
+  --stage `
+  --progress
 ```
 
 ## Import from Hugging Face
@@ -165,7 +166,7 @@ modelvault import C:\external\model.safetensors `
 ModelVault first resolves the normal Hugging Face cache and, unless `--local-only` is supplied, can invoke the official `hf download` CLI on a cache miss:
 
 ```powershell
-modelvault import-hf sentence-transformers/all-MiniLM-L6-v2 --stage
+modelvault import-hf sentence-transformers/all-MiniLM-L6-v2 --stage --progress
 ```
 
 Useful options:

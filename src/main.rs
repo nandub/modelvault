@@ -10,10 +10,9 @@ use modelvault::attestation::{
 use modelvault::object_store::{ObjectStore, S3ObjectStore};
 use modelvault::{
     artifact::{
-        add_raw_artifact, add_raw_artifact_with_progress, add_safetensors_artifact,
-        add_safetensors_artifact_with_progress, inspect_safetensors, materialize,
-        materialize_selected_safetensors, materialize_with_progress, resolve_selected_tensor_names,
-        verify_artifact, ArtifactProgressPhase,
+        add_raw_artifact_with_progress, add_safetensors_artifact_with_progress,
+        inspect_safetensors, materialize_selected_safetensors, materialize_with_progress,
+        resolve_selected_tensor_names, verify_artifact, ArtifactProgressPhase,
     },
     benchmark::benchmark_pair,
     cas::{CompressionMode, LocalCas},
@@ -242,6 +241,9 @@ enum Command {
         pointer: Option<PathBuf>,
         #[arg(long)]
         stage: bool,
+        /// Print phase-aware artifact ingestion progress to standard error.
+        #[arg(long)]
+        progress: bool,
     },
     /// Import an external artifact into repository-local ModelVault management without first copying the large file.
     Import {
@@ -255,6 +257,9 @@ enum Command {
         chunk_size: usize,
         #[arg(long)]
         stage: bool,
+        /// Print phase-aware artifact ingestion progress to standard error.
+        #[arg(long)]
+        progress: bool,
     },
     /// Import a Hugging Face model file from the local cache or via the official `hf download` CLI.
     ImportHf {
@@ -275,6 +280,9 @@ enum Command {
         chunk_size: usize,
         #[arg(long)]
         stage: bool,
+        /// Print phase-aware artifact ingestion progress to standard error after download/cache resolution.
+        #[arg(long)]
+        progress: bool,
     },
     /// Show provenance recorded for a manifest or .mvptr file.
     Provenance {
@@ -308,6 +316,9 @@ enum Command {
         pointer: PathBuf,
         #[arg(long)]
         output: Option<PathBuf>,
+        /// Print reconstruction and final verification progress to standard error.
+        #[arg(long)]
+        progress: bool,
     },
     /// Write a derived Safetensors file containing only explicitly selected tensors.
     ExtractTensors {
@@ -656,14 +667,23 @@ fn run_cli() -> anyhow::Result<()> {
             chunk_size,
             pointer,
             stage,
-        } => track_cmd(&path, format, chunk_size, pointer.as_deref(), stage)?,
+            progress,
+        } => track_cmd(
+            &path,
+            format,
+            chunk_size,
+            pointer.as_deref(),
+            stage,
+            progress,
+        )?,
         Command::Import {
             source,
             to,
             format,
             chunk_size,
             stage,
-        } => import_cmd(&source, &to, format, chunk_size, stage, None)?,
+            progress,
+        } => import_cmd(&source, &to, format, chunk_size, stage, None, progress)?,
         Command::ImportHf {
             repo_id,
             filename,
@@ -673,6 +693,7 @@ fn run_cli() -> anyhow::Result<()> {
             local_only,
             chunk_size,
             stage,
+            progress,
         } => import_hf_cmd(ImportHfOptions {
             repo_id: &repo_id,
             filename: &filename,
@@ -682,6 +703,7 @@ fn run_cli() -> anyhow::Result<()> {
             local_only,
             chunk_size,
             stage,
+            progress,
         })?,
         Command::Provenance { artifact, json } => provenance_cmd(&artifact, json)?,
         Command::Derive {
@@ -696,7 +718,11 @@ fn run_cli() -> anyhow::Result<()> {
             json,
             max_depth,
         } => lineage_cmd(&artifact, json, max_depth)?,
-        Command::Checkout { pointer, output } => checkout_cmd(&pointer, output.as_deref())?,
+        Command::Checkout {
+            pointer,
+            output,
+            progress,
+        } => checkout_cmd(&pointer, output.as_deref(), progress)?,
         Command::ExtractTensors {
             pointer,
             tensors,
@@ -831,32 +857,6 @@ fn run_cli() -> anyhow::Result<()> {
     Ok(())
 }
 
-fn add_by_format(
-    path: &Path,
-    cas: &LocalCas,
-    format: ArtifactFormat,
-    chunk_size: usize,
-) -> anyhow::Result<modelvault::artifact::AddArtifactResult> {
-    let chosen = match format {
-        ArtifactFormat::Auto => {
-            if path
-                .extension()
-                .and_then(|e| e.to_str())
-                .is_some_and(|e| e.eq_ignore_ascii_case("safetensors"))
-            {
-                ArtifactFormat::Safetensors
-            } else {
-                ArtifactFormat::Raw
-            }
-        }
-        other => other,
-    };
-    match chosen {
-        ArtifactFormat::Safetensors => add_safetensors_artifact(path, cas, chunk_size),
-        ArtifactFormat::Raw | ArtifactFormat::Auto => add_raw_artifact(path, cas, chunk_size),
-    }
-}
-
 fn add_by_format_with_progress(
     path: &Path,
     cas: &LocalCas,
@@ -962,6 +962,7 @@ fn track_cmd(
     chunk_size: usize,
     requested_pointer: Option<&Path>,
     stage: bool,
+    progress: bool,
 ) -> anyhow::Result<()> {
     anyhow::ensure!(path.exists(), "artifact does not exist: {}", path.display());
     anyhow::ensure!(chunk_size > 0, "--chunk-size must be greater than zero");
@@ -973,7 +974,12 @@ fn track_cmd(
     );
     let store_path = root.join(".modelvault");
     let cas = LocalCas::open(&store_path)?;
-    let result = add_by_format(path, &cas, format, chunk_size)?;
+    let mut callback = |phase, completed, total| {
+        if progress {
+            print_artifact_progress(phase, completed, total);
+        }
+    };
+    let result = add_by_format_with_progress(path, &cas, format, chunk_size, &mut callback)?;
 
     let pointer = ArtifactPointer::from_manifest(&result.manifest);
     let pointer_path =
@@ -1021,6 +1027,7 @@ fn import_cmd(
     chunk_size: usize,
     stage: bool,
     provenance: Option<ArtifactProvenance>,
+    progress: bool,
 ) -> anyhow::Result<()> {
     anyhow::ensure!(
         source.exists(),
@@ -1039,7 +1046,12 @@ fn import_cmd(
 
     let pointer_path = pointer_path_for_target(&target);
     let cas = LocalCas::open(root.join(".modelvault"))?;
-    let mut result = add_by_format(source, &cas, format, chunk_size)?;
+    let mut callback = |phase, completed, total| {
+        if progress {
+            print_artifact_progress(phase, completed, total);
+        }
+    };
+    let mut result = add_by_format_with_progress(source, &cas, format, chunk_size, &mut callback)?;
     if provenance.is_some() {
         result.manifest.provenance = provenance;
         result.manifest_path = result.manifest.save(cas.root())?;
@@ -1079,6 +1091,7 @@ struct ImportHfOptions<'a> {
     local_only: bool,
     chunk_size: usize,
     stage: bool,
+    progress: bool,
 }
 
 fn import_hf_cmd(options: ImportHfOptions<'_>) -> anyhow::Result<()> {
@@ -1091,6 +1104,7 @@ fn import_hf_cmd(options: ImportHfOptions<'_>) -> anyhow::Result<()> {
         local_only,
         chunk_size,
         stage,
+        progress,
     } = options;
 
     anyhow::ensure!(
@@ -1131,6 +1145,7 @@ fn import_hf_cmd(options: ImportHfOptions<'_>) -> anyhow::Result<()> {
         chunk_size,
         stage,
         Some(provenance),
+        progress,
     )
 }
 
@@ -1288,7 +1303,7 @@ fn print_lineage_node(node: &LineageGraphNode, prefix: &str, root: bool) {
     }
 }
 
-fn checkout_cmd(pointer_path: &Path, output: Option<&Path>) -> anyhow::Result<()> {
+fn checkout_cmd(pointer_path: &Path, output: Option<&Path>, progress: bool) -> anyhow::Result<()> {
     let root = git_root()?;
     let pointer = ArtifactPointer::load(pointer_path)?;
     let (_, manifest) = pointer.resolve_manifest(&root)?;
@@ -1301,7 +1316,12 @@ fn checkout_cmd(pointer_path: &Path, output: Option<&Path>) -> anyhow::Result<()
             .map(|n| pointer_path.with_file_name(n))
             .unwrap_or_else(|| PathBuf::from(&pointer.source_name))
     });
-    materialize(&manifest, &cas, &target)?;
+    let mut callback = |phase, completed, total| {
+        if progress {
+            print_artifact_progress(phase, completed, total);
+        }
+    };
+    materialize_with_progress(&manifest, &cas, &target, &mut callback)?;
     println!(
         "Materialized: {}\nArtifact ID:  {}\nVerified:     byte-for-byte hash match",
         target.display(),
@@ -1342,6 +1362,7 @@ fn extract_tensors_cmd(
             chunk_size,
             stage,
             None,
+            false,
         )?;
         let logical_target = repository_target_path(&root, target)?;
         let derived_pointer_path = pointer_path_for_target(&logical_target);

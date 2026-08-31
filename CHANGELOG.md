@@ -6,8 +6,9 @@
   published release archives.
 - Bounded Safetensors header allocation during ingestion before parsing
   untrusted header data.
-- Added opt-in phase-aware progress for large `add`, `add-raw`, and
-  `materialize` operations.
+- Added opt-in phase-aware progress for large artifact ingestion and
+  materialization operations, including `add`, `track`, `import`, `import-hf`,
+  `materialize`, and `checkout`.
 
 ## 1.7.6 - Release
 
