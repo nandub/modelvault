@@ -32,6 +32,10 @@ ModelVault rejects arbitrary, absolute, or traversal-based manifest references. 
 
 Manifest structure is validated before materialization or object traversal. Chunk ranges must be contiguous and non-overlapping, arithmetic must not overflow, object IDs must be valid BLAKE3 identifiers, and tensor ranges must stay inside the artifact.
 
+Safetensors header lengths are bounded before allocating header memory. This
+prevents a malformed local/imported artifact from requesting an unbounded
+allocation during format inspection.
+
 ### Content integrity
 
 Artifact and CAS identities are BLAKE3 hashes of logical/original bytes. Physical storage may be raw, Zstandard-compressed, packed, or delta-based without changing logical identity.

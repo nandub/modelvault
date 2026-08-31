@@ -27,6 +27,9 @@ ModelVault validates this structure before materialization.
 
 Safetensors consists of an 8-byte little-endian header length, a JSON header, and a contiguous tensor data buffer. ModelVault stores the binary header region with ordinary chunks and chunks tensor payloads without crossing tensor boundaries. Exact original bytes, including the original header representation, are preserved for byte-identical reconstruction.
 
+ModelVault accepts Safetensors headers up to 100 MiB. It enforces this limit
+before allocating header memory while ingesting or inspecting an artifact.
+
 ## Repository metadata
 
 Physical-layout policy lives in `.modelvault/repository.json`:

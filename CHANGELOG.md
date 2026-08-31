@@ -4,6 +4,8 @@
 
 - Added a one-command Windows helper for checksum and Sigstore verification of
   published release archives.
+- Bounded Safetensors header allocation during ingestion before parsing
+  untrusted header data.
 
 ## 1.7.6 - Release
 

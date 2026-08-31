@@ -14,6 +14,8 @@ use crate::{
     manifest::{ArtifactManifest, ChunkRef, TensorManifest},
 };
 
+const MAX_SAFETENSORS_HEADER_SIZE: u64 = 100 * 1024 * 1024;
+
 #[derive(Debug, Clone)]
 pub struct AddArtifactResult {
     pub manifest: ArtifactManifest,
@@ -27,6 +29,16 @@ struct RawTensorHeader {
     dtype: String,
     shape: Vec<usize>,
     data_offsets: [u64; 2],
+}
+
+fn checked_safetensors_header_len(header_len: u64) -> anyhow::Result<usize> {
+    if header_len > MAX_SAFETENSORS_HEADER_SIZE {
+        bail!(
+            "Safetensors header length {header_len} exceeds the {} byte safety limit",
+            MAX_SAFETENSORS_HEADER_SIZE
+        );
+    }
+    usize::try_from(header_len).context("Safetensors header length does not fit this platform")
 }
 
 pub fn hash_file(path: &Path) -> anyhow::Result<String> {
@@ -113,6 +125,7 @@ pub fn add_safetensors_artifact(
     let mut prefix = [0u8; 8];
     file.read_exact(&mut prefix)?;
     let header_len = u64::from_le_bytes(prefix);
+    let header_len_usize = checked_safetensors_header_len(header_len)?;
     let data_start = 8u64
         .checked_add(header_len)
         .context("Safetensors header length overflow")?;
@@ -120,7 +133,7 @@ pub fn add_safetensors_artifact(
         bail!("Safetensors header extends beyond end of file");
     }
 
-    let mut header_bytes = vec![0u8; header_len as usize];
+    let mut header_bytes = vec![0u8; header_len_usize];
     file.read_exact(&mut header_bytes)?;
     let value: serde_json::Value =
         serde_json::from_slice(&header_bytes).context("Invalid Safetensors JSON header")?;
@@ -245,4 +258,18 @@ pub fn add_safetensors_artifact(
         reused_bytes,
         manifest_path,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::{checked_safetensors_header_len, MAX_SAFETENSORS_HEADER_SIZE};
+
+    #[test]
+    fn safetensors_header_length_is_bounded_before_allocation() {
+        assert_eq!(
+            checked_safetensors_header_len(MAX_SAFETENSORS_HEADER_SIZE).unwrap(),
+            MAX_SAFETENSORS_HEADER_SIZE as usize
+        );
+        assert!(checked_safetensors_header_len(MAX_SAFETENSORS_HEADER_SIZE + 1).is_err());
+    }
 }
