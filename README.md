@@ -133,9 +133,12 @@ modelvault inspect .\models\model.safetensors
 modelvault inspect .\models\model.safetensors --json
 modelvault add .\models\model.safetensors
 modelvault add .\artifact.bin --format raw --chunk-size 1048576
+modelvault add .\models\large-model.safetensors --progress
 ```
 
 Safetensors is auto-detected by extension and uses tensor-bounded chunking. Unknown formats can use raw chunking.
+Pass `--progress` to `add`, `add-raw`, or `materialize` to show hashing,
+storage/reconstruction, and final verification progress on standard error.
 
 ## Track an artifact already inside Git
 

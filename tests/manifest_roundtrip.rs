@@ -1,7 +1,10 @@
 use std::fs;
 
 use modelvault::{
-    artifact::{add_raw_artifact, materialize, verify_artifact},
+    artifact::{
+        add_raw_artifact, add_raw_artifact_with_progress, materialize, materialize_with_progress,
+        verify_artifact, ArtifactProgressPhase,
+    },
     cas::LocalCas,
     manifest::ArtifactManifest,
 };
@@ -35,4 +38,30 @@ fn second_identical_artifact_reuses_every_chunk() {
     assert!(first.new_bytes > 0);
     assert_eq!(second.new_bytes, 0);
     assert_eq!(second.reused_bytes, second.manifest.logical_size);
+}
+
+#[test]
+fn ingest_and_materialize_report_completed_progress() {
+    let temp = tempdir().unwrap();
+    let source = temp.path().join("source.bin");
+    let output = temp.path().join("restored.bin");
+    let bytes = vec![7u8; 10_000];
+    fs::write(&source, &bytes).unwrap();
+    let cas = LocalCas::open(temp.path().join(".modelvault")).unwrap();
+
+    let mut ingest = Vec::new();
+    let added = add_raw_artifact_with_progress(&source, &cas, 4096, &mut |phase, done, total| {
+        ingest.push((phase, done, total));
+    })
+    .unwrap();
+    assert!(ingest.contains(&(ArtifactProgressPhase::Hashing, 10_000, 10_000)));
+    assert!(ingest.contains(&(ArtifactProgressPhase::Storing, 10_000, 10_000)));
+
+    let mut restored = Vec::new();
+    materialize_with_progress(&added.manifest, &cas, &output, &mut |phase, done, total| {
+        restored.push((phase, done, total));
+    })
+    .unwrap();
+    assert!(restored.contains(&(ArtifactProgressPhase::Materializing, 10_000, 10_000)));
+    assert!(restored.contains(&(ArtifactProgressPhase::Verifying, 10_000, 10_000)));
 }

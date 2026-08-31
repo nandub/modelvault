@@ -6,6 +6,8 @@
   published release archives.
 - Bounded Safetensors header allocation during ingestion before parsing
   untrusted header data.
+- Added opt-in phase-aware progress for large `add`, `add-raw`, and
+  `materialize` operations.
 
 ## 1.7.6 - Release
 

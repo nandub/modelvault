@@ -10,8 +10,10 @@ use modelvault::attestation::{
 use modelvault::object_store::{ObjectStore, S3ObjectStore};
 use modelvault::{
     artifact::{
-        add_raw_artifact, add_safetensors_artifact, inspect_safetensors, materialize,
-        materialize_selected_safetensors, resolve_selected_tensor_names, verify_artifact,
+        add_raw_artifact, add_raw_artifact_with_progress, add_safetensors_artifact,
+        add_safetensors_artifact_with_progress, inspect_safetensors, materialize,
+        materialize_selected_safetensors, materialize_with_progress, resolve_selected_tensor_names,
+        verify_artifact, ArtifactProgressPhase,
     },
     benchmark::benchmark_pair,
     cas::{CompressionMode, LocalCas},
@@ -167,6 +169,9 @@ enum Command {
         chunk_size: usize,
         #[arg(long, default_value = ".modelvault")]
         store: PathBuf,
+        /// Print phase-aware progress to standard error.
+        #[arg(long)]
+        progress: bool,
     },
     /// Legacy raw-add command. Prefer `modelvault add`.
     AddRaw {
@@ -175,6 +180,9 @@ enum Command {
         chunk_size: usize,
         #[arg(long, default_value = ".modelvault")]
         store: PathBuf,
+        /// Print phase-aware progress to standard error.
+        #[arg(long)]
+        progress: bool,
     },
     /// Reconstruct an artifact byte-for-byte from its manifest and CAS objects.
     Materialize {
@@ -182,6 +190,9 @@ enum Command {
         output: PathBuf,
         #[arg(long, default_value = ".modelvault")]
         store: PathBuf,
+        /// Print phase-aware progress to standard error.
+        #[arg(long)]
+        progress: bool,
     },
     /// Verify every object referenced by an artifact manifest.
     Verify {
@@ -558,30 +569,49 @@ fn run_cli() -> anyhow::Result<()> {
             format,
             chunk_size,
             store,
+            progress,
         } => {
             anyhow::ensure!(chunk_size > 0, "--chunk-size must be greater than zero");
             let cas = LocalCas::open(store)?;
-            let result = add_by_format(&path, &cas, format, chunk_size)?;
+            let mut callback = |phase, completed, total| {
+                if progress {
+                    print_artifact_progress(phase, completed, total);
+                }
+            };
+            let result =
+                add_by_format_with_progress(&path, &cas, format, chunk_size, &mut callback)?;
             print_add_result(&path, &result);
         }
         Command::AddRaw {
             path,
             chunk_size,
             store,
+            progress,
         } => {
             anyhow::ensure!(chunk_size > 0, "--chunk-size must be greater than zero");
             let cas = LocalCas::open(store)?;
-            let result = add_raw_artifact(&path, &cas, chunk_size)?;
+            let mut callback = |phase, completed, total| {
+                if progress {
+                    print_artifact_progress(phase, completed, total);
+                }
+            };
+            let result = add_raw_artifact_with_progress(&path, &cas, chunk_size, &mut callback)?;
             print_add_result(&path, &result);
         }
         Command::Materialize {
             manifest,
             output,
             store,
+            progress,
         } => {
             let cas = LocalCas::open(store)?;
             let manifest = ArtifactManifest::load(&manifest)?;
-            materialize(&manifest, &cas, &output)?;
+            let mut callback = |phase, completed, total| {
+                if progress {
+                    print_artifact_progress(phase, completed, total);
+                }
+            };
+            materialize_with_progress(&manifest, &cas, &output, &mut callback)?;
             println!(
                 "Materialized: {}\nBLAKE3:      {}\nVerified:    byte-for-byte hash match",
                 output.display(),
@@ -824,6 +854,37 @@ fn add_by_format(
     match chosen {
         ArtifactFormat::Safetensors => add_safetensors_artifact(path, cas, chunk_size),
         ArtifactFormat::Raw | ArtifactFormat::Auto => add_raw_artifact(path, cas, chunk_size),
+    }
+}
+
+fn add_by_format_with_progress(
+    path: &Path,
+    cas: &LocalCas,
+    format: ArtifactFormat,
+    chunk_size: usize,
+    progress: &mut modelvault::artifact::ArtifactProgressCallback<'_>,
+) -> anyhow::Result<modelvault::artifact::AddArtifactResult> {
+    let chosen = match format {
+        ArtifactFormat::Auto => {
+            if path
+                .extension()
+                .and_then(|e| e.to_str())
+                .is_some_and(|e| e.eq_ignore_ascii_case("safetensors"))
+            {
+                ArtifactFormat::Safetensors
+            } else {
+                ArtifactFormat::Raw
+            }
+        }
+        other => other,
+    };
+    match chosen {
+        ArtifactFormat::Safetensors => {
+            add_safetensors_artifact_with_progress(path, cas, chunk_size, progress)
+        }
+        ArtifactFormat::Raw | ArtifactFormat::Auto => {
+            add_raw_artifact_with_progress(path, cas, chunk_size, progress)
+        }
     }
 }
 
@@ -1469,6 +1530,24 @@ fn print_add_result(path: &Path, result: &modelvault::artifact::AddArtifactResul
         result.reused_bytes as f64 / logical as f64 * 100.0
     };
     println!("Artifact:      {}\nFormat:        {}\nArtifact ID:   {}\nLogical size:  {} bytes\nChunks:        {}\nTensors:       {}\nNew bytes:     {}\nReused bytes:  {}\nReuse:         {:.2}%\nManifest:      {}",path.display(),result.manifest.format,result.manifest.artifact_id,logical,result.manifest.chunks.len(),result.manifest.tensors.len(),result.new_bytes,result.reused_bytes,reuse_pct,result.manifest_path.display());
+}
+
+fn print_artifact_progress(phase: ArtifactProgressPhase, completed: u64, total: u64) {
+    let phase = match phase {
+        ArtifactProgressPhase::Hashing => "Hashing",
+        ArtifactProgressPhase::Storing => "Storing",
+        ArtifactProgressPhase::Materializing => "Materializing",
+        ArtifactProgressPhase::Verifying => "Verifying",
+    };
+    let percent = if total == 0 {
+        100.0
+    } else {
+        completed as f64 * 100.0 / total as f64
+    };
+    eprint!("\r{phase}: {percent:>6.2}% ({completed}/{total} bytes)");
+    if completed == total {
+        eprintln!();
+    }
 }
 
 fn compare_manifests(left: &ArtifactManifest, right: &ArtifactManifest) {

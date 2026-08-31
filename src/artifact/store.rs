@@ -9,6 +9,7 @@ use anyhow::{bail, Context};
 use serde::Deserialize;
 
 use crate::{
+    artifact::{ArtifactProgressCallback, ArtifactProgressPhase},
     cas::LocalCas,
     chunk::{chunk_bytes, chunk_tensor_range},
     manifest::{ArtifactManifest, ChunkRef, TensorManifest},
@@ -42,15 +43,29 @@ fn checked_safetensors_header_len(header_len: u64) -> anyhow::Result<usize> {
 }
 
 pub fn hash_file(path: &Path) -> anyhow::Result<String> {
+    hash_file_with_progress(path, ArtifactProgressPhase::Hashing, &mut |_, _, _| {})
+}
+
+pub(crate) fn hash_file_with_progress(
+    path: &Path,
+    phase: ArtifactProgressPhase,
+    progress: &mut ArtifactProgressCallback<'_>,
+) -> anyhow::Result<String> {
     let mut file = File::open(path)?;
+    let logical_size = file.metadata()?.len();
     let mut hasher = blake3::Hasher::new();
     let mut buf = vec![0u8; 1024 * 1024];
+    let mut completed = 0u64;
     loop {
         let n = file.read(&mut buf)?;
         if n == 0 {
             break;
         }
         hasher.update(&buf[..n]);
+        completed = completed
+            .checked_add(n as u64)
+            .context("artifact hashing byte count overflow")?;
+        progress(phase, completed, logical_size);
     }
     Ok(hasher.finalize().to_hex().to_string())
 }
@@ -60,8 +75,17 @@ pub fn add_raw_artifact(
     cas: &LocalCas,
     chunk_size: usize,
 ) -> anyhow::Result<AddArtifactResult> {
+    add_raw_artifact_with_progress(path, cas, chunk_size, &mut |_, _, _| {})
+}
+
+pub fn add_raw_artifact_with_progress(
+    path: &Path,
+    cas: &LocalCas,
+    chunk_size: usize,
+    progress: &mut ArtifactProgressCallback<'_>,
+) -> anyhow::Result<AddArtifactResult> {
     let logical_size = std::fs::metadata(path)?.len();
-    let artifact_id = hash_file(path)?;
+    let artifact_id = hash_file_with_progress(path, ArtifactProgressPhase::Hashing, progress)?;
     let mut file = File::open(path)?;
     let mut chunks = Vec::new();
     let mut new_bytes = 0u64;
@@ -77,6 +101,11 @@ pub fn add_raw_artifact(
         } else {
             reused_bytes += put.size;
         }
+        progress(
+            ArtifactProgressPhase::Storing,
+            range.offset + range.len as u64,
+            logical_size,
+        );
         chunks.push(ChunkRef {
             object: put.id.to_string(),
             offset: range.offset,
@@ -115,12 +144,21 @@ pub fn add_safetensors_artifact(
     cas: &LocalCas,
     chunk_size: usize,
 ) -> anyhow::Result<AddArtifactResult> {
+    add_safetensors_artifact_with_progress(path, cas, chunk_size, &mut |_, _, _| {})
+}
+
+pub fn add_safetensors_artifact_with_progress(
+    path: &Path,
+    cas: &LocalCas,
+    chunk_size: usize,
+    progress: &mut ArtifactProgressCallback<'_>,
+) -> anyhow::Result<AddArtifactResult> {
     let logical_size = std::fs::metadata(path)?.len();
     if logical_size < 8 {
         bail!("Safetensors file is too small to contain a header");
     }
 
-    let artifact_id = hash_file(path)?;
+    let artifact_id = hash_file_with_progress(path, ArtifactProgressPhase::Hashing, progress)?;
     let mut file = File::open(path)?;
     let mut prefix = [0u8; 8];
     file.read_exact(&mut prefix)?;
@@ -173,6 +211,11 @@ pub fn add_safetensors_artifact(
         } else {
             reused_bytes += put.size;
         }
+        progress(
+            ArtifactProgressPhase::Storing,
+            range.offset + range.len as u64,
+            logical_size,
+        );
         chunks.push(ChunkRef {
             object: put.id.to_string(),
             offset: range.offset,
@@ -208,6 +251,11 @@ pub fn add_safetensors_artifact(
             } else {
                 reused_bytes += put.size;
             }
+            progress(
+                ArtifactProgressPhase::Storing,
+                tc.absolute.offset + tc.absolute.len as u64,
+                logical_size,
+            );
             chunks.push(ChunkRef {
                 object: put.id.to_string(),
                 offset: tc.absolute.offset,

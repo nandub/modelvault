@@ -11,6 +11,7 @@ use anyhow::{bail, ensure, Context};
 use serde::Serialize;
 
 use crate::{
+    artifact::{ArtifactProgressCallback, ArtifactProgressPhase},
     cas::{LocalCas, ObjectId},
     manifest::{validate_manifest_structure, ArtifactManifest},
 };
@@ -51,6 +52,15 @@ pub fn materialize(
     cas: &LocalCas,
     output: &Path,
 ) -> anyhow::Result<()> {
+    materialize_with_progress(manifest, cas, output, &mut |_, _, _| {})
+}
+
+pub fn materialize_with_progress(
+    manifest: &ArtifactManifest,
+    cas: &LocalCas,
+    output: &Path,
+    progress: &mut ArtifactProgressCallback<'_>,
+) -> anyhow::Result<()> {
     validate_manifest_structure(manifest)?;
     if let Some(parent) = output.parent() {
         fs::create_dir_all(parent)?;
@@ -76,11 +86,17 @@ pub fn materialize(
         }
         file.seek(SeekFrom::Start(chunk.offset))?;
         file.write_all(&bytes)?;
+        progress(
+            ArtifactProgressPhase::Materializing,
+            chunk.offset + chunk.size,
+            manifest.logical_size,
+        );
     }
     file.sync_all()?;
     drop(file);
 
-    let actual = super::store::hash_file(&tmp)?;
+    let actual =
+        super::store::hash_file_with_progress(&tmp, ArtifactProgressPhase::Verifying, progress)?;
     if actual != manifest.artifact_id {
         let _ = fs::remove_file(&tmp);
         bail!(
