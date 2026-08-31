@@ -1,9 +1,0 @@
-{
-  "version": 1,
-  "object_hash": "blake3",
-  "loose_compression": "none",
-  "zstd_level": 3,
-  "pack_format_version": 2,
-  "delta_min_savings_pct": 20,
-  "max_delta_depth": 2
-}
