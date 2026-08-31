@@ -3,6 +3,22 @@
 ModelVault GitHub Releases use Sigstore keyless signing for each platform ZIP
 archive and for `SHA256SUMS`.
 
+## One-command verification
+
+Install [GitHub CLI](https://cli.github.com/) and
+[Cosign](https://docs.sigstore.dev/cosign/system_config/installation/), then
+run this from a ModelVault source checkout on Windows:
+
+```powershell
+.\scripts\Verify-PublishedRelease.ps1 -ReleaseTag v1.7.6
+```
+
+The helper downloads the Windows x86_64 archive plus its checksum and Sigstore
+bundles to a temporary directory, verifies the archive SHA-256 value, verifies
+the keyless signatures for both the archive and `SHA256SUMS`, and removes the
+temporary files. Pass `-Target` for a different release target or
+`-KeepDownloads` to retain the downloaded assets.
+
 The release workflow receives a GitHub Actions OpenID Connect token and creates
 one `<asset>.sigstore.json` bundle per signed asset. A bundle contains the
 signature, short-lived certificate, and Rekor transparency-log inclusion proof.

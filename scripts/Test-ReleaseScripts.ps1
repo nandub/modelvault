@@ -3,7 +3,10 @@ param()
 
 $ErrorActionPreference = 'Stop'
 $root = Split-Path -Parent $PSScriptRoot
-$releaseScripts = Get-ChildItem (Join-Path $PSScriptRoot 'release') -Filter '*.ps1'
+$releaseScripts = @(
+    Get-ChildItem $PSScriptRoot -Filter '*.ps1'
+    Get-ChildItem (Join-Path $PSScriptRoot 'release') -Filter '*.ps1'
+)
 foreach ($script in $releaseScripts) {
     [void][scriptblock]::Create([System.IO.File]::ReadAllText($script.FullName))
 }

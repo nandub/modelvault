@@ -1,5 +1,10 @@
 # Changelog
 
+## Unreleased
+
+- Added a one-command Windows helper for checksum and Sigstore verification of
+  published release archives.
+
 ## 1.7.6 - Release
 
 - Added an optional signing-feature CI gate for build, tests, and strict Clippy.

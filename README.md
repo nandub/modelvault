@@ -64,6 +64,8 @@ workflow then downloads the published Linux archive, verifies it against
 
 Each release asset and `SHA256SUMS` receive a keyless Sigstore bundle. See
 [release artifact signing](docs/release-signing.md) for verification commands.
+On Windows, `./scripts/Verify-PublishedRelease.ps1 -ReleaseTag v1.7.6`
+downloads and verifies the matching archive, checksum, and Sigstore bundles.
 The workflow derives these verification assets from archives downloaded back
 from the GitHub Release, then performs its smoke test against those uploaded
 release files.
