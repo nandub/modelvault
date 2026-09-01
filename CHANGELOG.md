@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.7.7 - Release
 
 - Added a one-command Windows helper for checksum and Sigstore verification of
   published release archives.
